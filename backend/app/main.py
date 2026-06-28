@@ -15,8 +15,23 @@ logger.info("Initializing database tables...")
 Base.metadata.create_all(bind=engine)
 logger.success("Database tables initialized successfully.")
 
-app = FastAPI(title=settings.PROJECT_NAME)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    description=settings.PROJECT_DESCRIPTION,
+    version=settings.API_VERSION,
+    docs_url=settings.DOCS_URL if settings.ENABLE_DOCS else None,
+    redoc_url=settings.REDOC_URL if settings.ENABLE_DOCS else None,
+    openapi_url=settings.OPENAPI_URL if settings.ENABLE_DOCS else None,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(devices.router)
 app.include_router(sms.router)
 
@@ -26,7 +41,11 @@ def read_root():
     return {"message": "OpenRelay SMS Gateway API is running"}
 
 @app.websocket("/ws/device")
-async def websocket_endpoint(websocket: WebSocket, token: str = Query(...), db: Session = Depends(get_db)):
+async def websocket_endpoint(
+    websocket: WebSocket,
+    token: str = Query(...),
+    db: Session = Depends(get_db)
+):
     try:
         payload = verify_token(token)
         device_uuid = payload.get("sub")
