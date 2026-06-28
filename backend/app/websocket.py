@@ -5,6 +5,7 @@ from app.logger import logger
 
 class ConnectionManager:
     def __init__(self):
+        # Maps device_uuid to WebSocket connection
         self.active_connections: Dict[str, WebSocket] = {}
 
     async def connect(self, device_uuid: str, websocket: WebSocket):
@@ -32,3 +33,4 @@ class ConnectionManager:
         return False
 
 manager = ConnectionManager()
+
