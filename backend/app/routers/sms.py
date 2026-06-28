@@ -4,6 +4,7 @@ from app.database import get_db
 from app.models import Device, SMSJob
 from app.schemas import SMSSendRequest, SMSSendResponse, SMSBatchRequest, SMSBatchResponse
 from app.websocket import manager
+from app.logger import logger
 
 router = APIRouter(prefix="/sms", tags=["sms"])
 
@@ -11,16 +12,19 @@ router = APIRouter(prefix="/sms", tags=["sms"])
 async def send_sms(request: SMSSendRequest, db: Session = Depends(get_db)):
     device = db.query(Device).filter(Device.uuid == request.device).first()
     if not device:
+        logger.error(f"Send SMS failed: Device '{request.device}' does not exist.")
         raise HTTPException(status_code=404, detail="Device not found")
     job = SMSJob(device_uuid=device.uuid, recipient=request.to, message=request.message, status="PENDING")
     db.add(job)
     db.commit()
     db.refresh(job)
+    logger.info(f"Created SMS Job {job.id} for device {device.uuid} (recipient: {request.to})")
     websocket_payload = {"type": "SEND_SMS", "jobId": str(job.id), "to": job.recipient, "message": job.message}
     sent = await manager.send_personal_message(websocket_payload, device.uuid)
     if not sent:
         job.status = "FAILED"
         db.commit()
+        logger.error(f"Failed to push SMS Job {job.id}: Device {device.uuid} is offline.")
         raise HTTPException(status_code=503, detail="Device offline")
     return SMSSendResponse(jobId=job.id, status=job.status)
 
@@ -28,8 +32,10 @@ async def send_sms(request: SMSSendRequest, db: Session = Depends(get_db)):
 async def send_batch_sms(request: SMSBatchRequest, db: Session = Depends(get_db)):
     device = db.query(Device).filter(Device.uuid == request.device).first()
     if not device:
+        logger.error(f"Send Batch SMS failed: Device '{request.device}' does not exist.")
         raise HTTPException(status_code=404, detail="Device not found")
     responses = []
+    logger.info(f"Processing batch of {len(request.messages)} SMS messages for device {device.uuid}")
     for msg in request.messages:
         job = SMSJob(device_uuid=device.uuid, recipient=msg.to, message=msg.message, status="PENDING")
         db.add(job)
@@ -40,6 +46,7 @@ async def send_batch_sms(request: SMSBatchRequest, db: Session = Depends(get_db)
         if not sent:
             job.status = "FAILED"
             db.commit()
+            logger.error(f"Failed to push SMS Job {job.id} from batch: Device {device.uuid} is offline.")
             responses.append(SMSSendResponse(jobId=job.id, status="FAILED"))
         else:
             responses.append(SMSSendResponse(jobId=job.id, status="PENDING"))

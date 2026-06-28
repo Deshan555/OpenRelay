@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import Device
 from app.schemas import DeviceRegisterRequest, DeviceRegisterResponse
 from app.auth import create_access_token
+from app.logger import logger
 
 router = APIRouter(prefix="/devices", tags=["devices"])
 
@@ -19,6 +20,7 @@ def register_device(request: DeviceRegisterRequest, db: Session = Depends(get_db
         device.carrier = request.carrier or device.carrier
         device.last_seen = datetime.datetime.utcnow()
         device.token = token
+        logger.info(f"Updated registration info for device UUID: {request.uuid} (Name: {request.name})")
     else:
         device = Device(
             uuid=request.uuid,
@@ -29,6 +31,7 @@ def register_device(request: DeviceRegisterRequest, db: Session = Depends(get_db
             token=token
         )
         db.add(device)
+        logger.success(f"Registered new device UUID: {request.uuid} (Name: {request.name})")
     db.commit()
     db.refresh(device)
     return DeviceRegisterResponse(deviceId=device.uuid, token=token)
