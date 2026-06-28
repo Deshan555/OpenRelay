@@ -98,3 +98,23 @@ curl -X POST http://localhost:8000/sms/send \
 2. The WebSocket manager will push the payload to the simulator.
 3. The simulator console will log: `[job_id] SENDING SMS...` and reply over the WebSocket channel with `RESULT: SENT`.
 4. The server console will print a green `SUCCESS` message confirming the delivery result.
+
+---
+
+## Running the Admin Control Panel
+
+OpenRelay includes a modern web-based control panel to monitor your devices and dispatch SMS messages visually.
+
+### 1. Install & Build
+Navigate to the `frontend` directory and install the dependencies:
+```bash
+cd frontend
+npm install
+```
+
+### 2. Run in Development Mode
+Launch the local development server:
+```bash
+npm run dev
+```
+Open the local URL (e.g. `http://localhost:5173`) in your web browser. You will see a real-time responsive dashboard listing your registered devices, battery levels, connection states, and a console to send text messages immediately.
