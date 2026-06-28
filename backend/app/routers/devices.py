@@ -1,13 +1,29 @@
 import datetime
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Device
-from app.schemas import DeviceRegisterRequest, DeviceRegisterResponse
+from app.schemas import DeviceRegisterRequest, DeviceRegisterResponse, DeviceResponse
 from app.auth import create_access_token
 from app.logger import logger
 
 router = APIRouter(prefix="/devices", tags=["devices"])
+
+@router.get(
+    "/",
+    response_model=List[DeviceResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Get all registered devices",
+    description="Retrieves a list of all devices that have been registered with the OpenRelay server, including their connection status, battery, signal quality, and location info."
+)
+def get_all_devices(db: Session = Depends(get_db)):
+    """
+    Returns a list of all registered devices in the database.
+    """
+    logger.debug("Fetch all registered devices requested.")
+    devices = db.query(Device).all()
+    return devices
 
 @router.post(
     "/register",
@@ -63,4 +79,5 @@ def register_device(request: DeviceRegisterRequest, db: Session = Depends(get_db
     db.refresh(device)
     
     return DeviceRegisterResponse(deviceId=device.uuid, token=token)
+
 

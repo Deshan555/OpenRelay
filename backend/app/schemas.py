@@ -17,6 +17,23 @@ class DeviceRegisterResponse(BaseModel):
     deviceId: str
     token: str
 
+class DeviceResponse(BaseModel):
+    uuid: str
+    name: Optional[str] = None
+    model: Optional[str] = None
+    android_version: Optional[str] = None
+    battery: Optional[int] = None
+    carrier: Optional[str] = None
+    signal: Optional[int] = None
+    status: str
+    last_seen: datetime
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
 # SMS sending
 class SMSSendRequest(BaseModel):
     device: str  # device UUID
