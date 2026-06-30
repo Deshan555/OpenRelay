@@ -30,6 +30,14 @@ class MainActivity : FlutterActivity() {
                             result.error("INVALID_ARGS", "Missing 'to' or 'message'", null)
                         }
                     }
+                    "getCarrierName" -> {
+                        try {
+                            val tm = getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+                            result.success(tm.networkOperatorName ?: "Unknown")
+                        } catch (e: Exception) {
+                            result.success("Unknown")
+                        }
+                    }
                     else -> result.notImplemented()
                 }
             }

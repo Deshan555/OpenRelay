@@ -28,6 +28,7 @@ class _SetupScreenState extends State<SetupScreen> {
   bool _smsGranted = false;
   bool _phoneGranted = false;
   bool _notificationGranted = false;
+  bool _locationGranted = false;
 
   int _currentStep = 0; // 0 = permissions, 1 = server config, 2 = connecting
 
@@ -41,6 +42,7 @@ class _SetupScreenState extends State<SetupScreen> {
     _smsGranted = await Permission.sms.isGranted;
     _phoneGranted = await Permission.phone.isGranted;
     _notificationGranted = await Permission.notification.isGranted;
+    _locationGranted = await Permission.location.isGranted;
     if (mounted) setState(() {});
   }
 
@@ -48,14 +50,16 @@ class _SetupScreenState extends State<SetupScreen> {
     final smsStatus = await Permission.sms.request();
     final phoneStatus = await Permission.phone.request();
     final notifStatus = await Permission.notification.request();
+    final locationStatus = await Permission.location.request();
 
     setState(() {
       _smsGranted = smsStatus.isGranted;
       _phoneGranted = phoneStatus.isGranted;
       _notificationGranted = notifStatus.isGranted;
+      _locationGranted = locationStatus.isGranted;
     });
 
-    if (_smsGranted && _phoneGranted) {
+    if (_smsGranted && _phoneGranted && _locationGranted) {
       setState(() => _currentStep = 1);
     }
   }
@@ -291,18 +295,25 @@ class _SetupScreenState extends State<SetupScreen> {
           subtitle: 'Show service status notification',
           granted: _notificationGranted,
         ),
+        const SizedBox(height: 12),
+        _permissionTile(
+          icon: Icons.location_on_rounded,
+          title: 'GPS Location',
+          subtitle: 'Send device location updates to backend',
+          granted: _locationGranted,
+        ),
         const SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: (_smsGranted && _phoneGranted)
+            onPressed: (_smsGranted && _phoneGranted && _locationGranted)
                 ? () => setState(() => _currentStep = 1)
                 : _requestPermissions,
             icon: Icon(
-              (_smsGranted && _phoneGranted) ? Icons.arrow_forward : Icons.security_rounded,
+              (_smsGranted && _phoneGranted && _locationGranted) ? Icons.arrow_forward : Icons.security_rounded,
             ),
             label: Text(
-              (_smsGranted && _phoneGranted) ? 'Continue' : 'Grant Permissions',
+              (_smsGranted && _phoneGranted && _locationGranted) ? 'Continue' : 'Grant Permissions',
             ),
           ),
         ),

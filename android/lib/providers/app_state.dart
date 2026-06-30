@@ -3,11 +3,13 @@ import 'package:flutter/foundation.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:geolocator/geolocator.dart';
 import '../constants.dart';
 import '../models/models.dart';
 import '../services/api_client.dart';
 import '../services/database.dart';
 import '../services/websocket_service.dart';
+import '../services/sms_sender.dart';
 
 /// Central application state managed with ChangeNotifier (Provider pattern).
 class AppState extends ChangeNotifier {
@@ -54,6 +56,12 @@ class AppState extends ChangeNotifier {
 
   int _signal = 0;
   int get signal => _signal;
+
+  double? _latitude;
+  double? get latitude => _latitude;
+
+  double? _longitude;
+  double? get longitude => _longitude;
 
   // SMS stats
   Map<String, int> _jobStats = {};
@@ -131,6 +139,26 @@ class AppState extends ChangeNotifier {
     final deviceInfo = DeviceInfoPlugin();
     final androidInfo = await deviceInfo.androidInfo;
 
+    // Fetch carrier and location before registering
+    try {
+      _carrier = await SmsSender.getCarrierName();
+    } catch (_) {}
+
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+          final position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low,
+            timeLimit: const Duration(seconds: 5),
+          );
+          _latitude = position.latitude;
+          _longitude = position.longitude;
+        }
+      }
+    } catch (_) {}
+
     _apiClient = ApiClient(baseUrl: _serverUrl);
 
     final request = DeviceRegisterRequest(
@@ -139,6 +167,8 @@ class AppState extends ChangeNotifier {
       model: '${androidInfo.manufacturer} ${androidInfo.model}',
       androidVersion: 'Android ${androidInfo.version.release}',
       carrier: _carrier.isNotEmpty ? _carrier : null,
+      latitude: _latitude,
+      longitude: _longitude,
     );
 
     final response = await _apiClient!.registerDevice(request);
@@ -236,11 +266,34 @@ class AppState extends ChangeNotifier {
       _battery = await _batteryPlugin.batteryLevel;
     } catch (_) {}
 
+    // Fetch Carrier from native side
+    try {
+      _carrier = await SmsSender.getCarrierName();
+    } catch (_) {}
+
+    // Fetch GPS coordinates
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (serviceEnabled) {
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
+          final position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.low,
+            timeLimit: const Duration(seconds: 5),
+          );
+          _latitude = position.latitude;
+          _longitude = position.longitude;
+        }
+      }
+    } catch (_) {}
+
     // Update WebSocket service with latest sensor data
     if (_wsService != null) {
       _wsService!.currentBattery = _battery;
       _wsService!.currentSignal = _signal;
       _wsService!.currentCarrier = _carrier.isNotEmpty ? _carrier : null;
+      _wsService!.currentLatitude = _latitude;
+      _wsService!.currentLongitude = _longitude;
     }
 
     notifyListeners();

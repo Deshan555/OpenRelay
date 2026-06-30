@@ -67,25 +67,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
               ),
             ],
           ),
-          body: RefreshIndicator(
-            onRefresh: () => appState.refreshJobStats(),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildConnectionCard(appState),
-                  const SizedBox(height: 16),
-                  _buildStatsGrid(appState),
-                  const SizedBox(height: 16),
-                  _buildDeviceInfoCard(appState),
-                  const SizedBox(height: 16),
-                  _buildRecentJobsCard(appState),
-                ],
-              ),
-            ),
-          ),
+          body: _buildSelectedTabContent(appState),
           bottomNavigationBar: NavigationBar(
             selectedIndex: _selectedTab,
             onDestinationSelected: (idx) => setState(() => _selectedTab = idx),
@@ -99,6 +81,233 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           ),
         );
       },
+    );
+  }
+
+  Widget _buildSelectedTabContent(AppState appState) {
+    switch (_selectedTab) {
+      case 0:
+        return _buildDashboardTab(appState);
+      case 1:
+        return _buildSmsJobsTab(appState);
+      case 2:
+        return _buildLogsTab(appState);
+      default:
+        return _buildDashboardTab(appState);
+    }
+  }
+
+  Widget _buildDashboardTab(AppState appState) {
+    return RefreshIndicator(
+      onRefresh: () => appState.refreshJobStats(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildConnectionCard(appState),
+            const SizedBox(height: 16),
+            _buildStatsGrid(appState),
+            const SizedBox(height: 16),
+            _buildDeviceInfoCard(appState),
+            const SizedBox(height: 16),
+            _buildRecentJobsCard(appState),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSmsJobsTab(AppState appState) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 8),
+          child: Text(
+            'SMS Job History',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+        Expanded(
+          child: appState.recentJobs.isEmpty
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.inbox_rounded, size: 64, color: AppTheme.textMuted),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'No SMS jobs found in database',
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  itemCount: appState.recentJobs.length,
+                  itemBuilder: (context, index) {
+                    final job = appState.recentJobs[index];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            _getJobStatusIcon(job['status'] as String? ?? 'PENDING'),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    job['recipient'] as String? ?? 'Unknown',
+                                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    job['message'] as String? ?? '',
+                                    style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    _formatJobTime(job['created_at'] as String?),
+                                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            _buildJobStatusChip(job['status'] as String? ?? 'PENDING'),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _getJobStatusIcon(String status) {
+    Color color;
+    IconData icon;
+    switch (status) {
+      case 'SENT':
+        color = AppTheme.accentGreen;
+        icon = Icons.check_circle_rounded;
+        break;
+      case 'FAILED':
+        color = AppTheme.accentRed;
+        icon = Icons.error_rounded;
+        break;
+      case 'SENDING':
+        color = AppTheme.accent;
+        icon = Icons.send_rounded;
+        break;
+      default:
+        color = AppTheme.pending;
+        icon = Icons.schedule_rounded;
+    }
+    return Icon(icon, color: color, size: 24);
+  }
+
+  Widget _buildJobStatusChip(String status) {
+    Color color;
+    switch (status) {
+      case 'SENT':
+        color = AppTheme.accentGreen;
+        break;
+      case 'FAILED':
+        color = AppTheme.accentRed;
+        break;
+      case 'SENDING':
+        color = AppTheme.accent;
+        break;
+      default:
+        color = AppTheme.pending;
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
+  String _formatJobTime(String? isoString) {
+    if (isoString == null) return '';
+    try {
+      final dt = DateTime.parse(isoString);
+      return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}:${dt.second.toString().padLeft(2, '0')} - ${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {
+      return isoString;
+    }
+  }
+
+  Widget _buildLogsTab(AppState appState) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'System Logs',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              Text(
+                '${appState.logs.length} logs cached',
+                style: TextStyle(color: AppTheme.textMuted, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0F172A),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.surfaceBorder),
+            ),
+            child: appState.logs.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No system logs generated yet.',
+                      style: TextStyle(color: AppTheme.textMuted, fontFamily: 'monospace'),
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: appState.logs.length,
+                    itemBuilder: (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          appState.logs[index],
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ),
+      ],
     );
   }
 

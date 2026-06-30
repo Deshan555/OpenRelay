@@ -22,4 +22,14 @@ class SmsSender {
       return 'FAILED: ${e.message}';
     }
   }
+
+  /// Get the carrier name from native TelephonyManager.
+  static Future<String> getCarrierName() async {
+    try {
+      final result = await _channel.invokeMethod<String>('getCarrierName');
+      return result ?? 'Unknown';
+    } catch (_) {
+      return 'Unknown';
+    }
+  }
 }
