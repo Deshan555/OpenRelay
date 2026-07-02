@@ -1,7 +1,10 @@
 
+
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime
+
+# ==================== V1 Schemas ====================
 
 # Device registration
 class DeviceRegisterRequest(BaseModel):
@@ -63,4 +66,44 @@ class DeviceStatusUpdate(BaseModel):
     status: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+
+
+# ==================== V2 Schemas ====================
+
+class DeviceRegisterResponseV2(BaseModel):
+    device_id: str
+    token: str
+
+class DeviceResponseV2(BaseModel):
+    uuid: str
+    name: Optional[str] = None
+    model: Optional[str] = None
+    android_version: Optional[str] = None
+    battery: Optional[int] = None
+    carrier: Optional[str] = None
+    signal: Optional[int] = None
+    status: str
+    last_seen: datetime
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+class SMSSendRequestV2(BaseModel):
+    device_id: str  # snake_case instead of device
+    to: str
+    message: str
+
+class SMSSendResponseV2(BaseModel):
+    job_id: int  # snake_case instead of jobId
+    status: str
+
+class SMSBatchRequestV2(BaseModel):
+    device_id: str  # snake_case instead of device
+    messages: List[SMSBatchMessage]
+
+class SMSBatchResponseV2(BaseModel):
+    jobs: List[SMSSendResponseV2]
+
 
