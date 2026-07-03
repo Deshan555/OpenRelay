@@ -19,10 +19,10 @@ class ApiClient {
   };
 
   /// Register this device with the server.
-  /// POST /devices/register
+  /// POST /api/v1/devices/register
   Future<DeviceRegisterResponse> registerDevice(DeviceRegisterRequest request) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/devices/register'),
+      Uri.parse('$baseUrl/api/v2/devices/register'),
       headers: _headers,
       body: jsonEncode(request.toJson()),
     );
@@ -38,10 +38,10 @@ class ApiClient {
   }
 
   /// Get all registered devices.
-  /// GET /devices/
+  /// GET /api/v1/devices/
   Future<List<DeviceInfo>> getAllDevices() async {
     final response = await http.get(
-      Uri.parse('$baseUrl/devices/'),
+      Uri.parse('$baseUrl/api/v2/devices/'),
       headers: _headers,
     );
 
