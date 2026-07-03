@@ -59,7 +59,7 @@ class WebSocketService {
       if (wsUrl.endsWith('/')) {
         wsUrl = wsUrl.substring(0, wsUrl.length - 1);
       }
-      wsUrl = '$wsUrl/ws/device?token=$token';
+      wsUrl = '$wsUrl/api/v2/ws/device?token=$token';
 
       _channel = WebSocketChannel.connect(Uri.parse(wsUrl));
 

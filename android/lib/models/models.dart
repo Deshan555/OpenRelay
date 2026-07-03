@@ -38,7 +38,7 @@ class DeviceRegisterResponse {
 
   factory DeviceRegisterResponse.fromJson(Map<String, dynamic> json) {
     return DeviceRegisterResponse(
-      deviceId: json['deviceId'] as String,
+      deviceId: (json['device_id'] ?? json['deviceId']) as String,
       token: json['token'] as String,
     );
   }
@@ -105,7 +105,7 @@ class SmsCommand {
   factory SmsCommand.fromJson(Map<String, dynamic> json) {
     return SmsCommand(
       type: json['type'] as String,
-      jobId: json['jobId'] as String,
+      jobId: (json['job_id'] ?? json['jobId'] ?? '') as String,
       to: json['to'] as String,
       message: json['message'] as String,
     );
@@ -126,7 +126,7 @@ class SmsResult {
 
   Map<String, dynamic> toJson() => {
     'type': type,
-    'jobId': jobId,
+    'job_id': jobId,
     'status': status,
   };
 }

@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:battery_plus/battery_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -16,6 +16,10 @@ class AppState extends ChangeNotifier {
   // Initialization state
   bool _initialized = false;
   bool get initialized => _initialized;
+
+  // Theme state
+  ThemeMode _themeMode = ThemeMode.system;
+  ThemeMode get themeMode => _themeMode;
 
   // Setup state
   bool _isSetupComplete = false;
@@ -63,6 +67,9 @@ class AppState extends ChangeNotifier {
   double? _longitude;
   double? get longitude => _longitude;
 
+  bool _useWhiteTheme = false;
+  bool get useWhiteTheme => _useWhiteTheme;
+
   // SMS stats
   Map<String, int> _jobStats = {};
   Map<String, int> get jobStats => _jobStats;
@@ -94,6 +101,18 @@ class AppState extends ChangeNotifier {
     _deviceName = prefs.getString(AppConstants.prefDeviceName) ?? '';
     _serviceRunning = prefs.getBool(AppConstants.prefServiceEnabled) ?? false;
 
+    // Load theme setting
+    final themeStr = prefs.getString('theme_mode') ?? 'system';
+    if (themeStr == 'dark') {
+      _themeMode = ThemeMode.dark;
+    } else if (themeStr == 'light') {
+      _themeMode = ThemeMode.light;
+    } else {
+      _themeMode = ThemeMode.system;
+    }
+
+    _useWhiteTheme = prefs.getBool('use_white_theme') ?? false;
+
     // Load device info
     await _loadDeviceInfo();
 
@@ -106,6 +125,13 @@ class AppState extends ChangeNotifier {
     }
 
     _initialized = true;
+    notifyListeners();
+  }
+
+  void setUseWhiteTheme(bool value) async {
+    _useWhiteTheme = value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('use_white_theme', value);
     notifyListeners();
   }
 
@@ -334,6 +360,34 @@ class AppState extends ChangeNotifier {
       _logs.removeRange(200, _logs.length);
     }
     notifyListeners();
+  }
+
+  /// Update server URL dynamically and restart WebSocket service if active.
+  Future<void> updateServerUrl(String newUrl) async {
+    _serverUrl = newUrl.trimRight().replaceAll(RegExp(r'/+$'), '');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(AppConstants.prefServerUrl, _serverUrl);
+    _addLog('Server URL updated to $_serverUrl');
+    
+    // Reset connection if running
+    if (_serviceRunning) {
+      _addLog('Restarting background service with new URL...');
+      stopService();
+      startService();
+    }
+    notifyListeners();
+  }
+
+  /// Change theme mode dynamically and persist.
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    String themeStr = 'system';
+    if (mode == ThemeMode.dark) themeStr = 'dark';
+    if (mode == ThemeMode.light) themeStr = 'light';
+    await prefs.setString('theme_mode', themeStr);
+    _addLog('Theme changed to $themeStr');
   }
 
   @override

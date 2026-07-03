@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/app_state.dart';
+import '../logo_painter.dart';
 import '../theme.dart';
 
 /// First-launch setup screen.
@@ -36,6 +39,12 @@ class _SetupScreenState extends State<SetupScreen> {
   void initState() {
     super.initState();
     _checkPermissions();
+    
+    // Auto-populate device name field with the detected device model
+    final appState = context.read<AppState>();
+    if (appState.deviceModel.isNotEmpty) {
+      _deviceNameController.text = appState.deviceModel;
+    }
   }
 
   Future<void> _checkPermissions() async {
@@ -147,49 +156,30 @@ class _SetupScreenState extends State<SetupScreen> {
   Widget _buildHeader() {
     return Column(
       children: [
-        // Animated icon
-        Container(
-          width: 80,
-          height: 80,
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [AppTheme.primary, AppTheme.accent],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: AppTheme.primary.withValues(alpha: 0.4),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: const Icon(Icons.cell_tower_rounded, size: 40, color: Colors.white),
-        ).animate().fadeIn(duration: 600.ms).scale(
-          begin: const Offset(0.8, 0.8),
-          end: const Offset(1.0, 1.0),
-          curve: Curves.easeOutBack,
-          duration: 600.ms,
+        CustomPaint(
+          size: const Size(80, 80),
+          painter: AntennaLogoPainter(color: AppTheme.primary),
         ),
         const SizedBox(height: 24),
         Text(
-          'OpenRelay',
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-            fontWeight: FontWeight.w800,
-            letterSpacing: -1,
+          'OPENRELAY',
+          style: GoogleFonts.bebasNeue(
+            fontSize: 40,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+            color: Colors.black,
           ),
-        ).animate().fadeIn(delay: 200.ms, duration: 500.ms).slideY(begin: 0.2, end: 0),
-        const SizedBox(height: 8),
+        ),
+        const SizedBox(height: 4),
         Text(
-          'SMS Gateway',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: AppTheme.accent,
-            fontWeight: FontWeight.w500,
-            letterSpacing: 2,
+          'SMS GATEWAY',
+          style: GoogleFonts.roboto(
+            color: AppTheme.primary,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 3.0,
+            fontSize: 12,
           ),
-        ).animate().fadeIn(delay: 400.ms, duration: 500.ms),
+        ),
       ],
     );
   }
@@ -204,7 +194,7 @@ class _SetupScreenState extends State<SetupScreen> {
         _stepLine(1),
         _stepDot(2, 'Connect'),
       ],
-    ).animate().fadeIn(delay: 500.ms, duration: 400.ms);
+    );
   }
 
   Widget _stepDot(int step, String label) {
@@ -216,21 +206,20 @@ class _SetupScreenState extends State<SetupScreen> {
           width: 32,
           height: 32,
           decoration: BoxDecoration(
-            color: isActive ? AppTheme.primary : AppTheme.surfaceLight,
-            shape: BoxShape.circle,
+            color: isActive ? AppTheme.primary : Colors.white,
             border: Border.all(
-              color: isActive ? AppTheme.primary : AppTheme.surfaceBorder,
-              width: 2,
+              color: AppTheme.border,
+              width: 1.5,
             ),
           ),
           child: Center(
             child: isActive && _currentStep > step
-                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                ? const FaIcon(FontAwesomeIcons.check, size: 12, color: Colors.white)
                 : Text(
                     '${step + 1}',
                     style: TextStyle(
-                      color: isActive ? Colors.white : AppTheme.textMuted,
-                      fontWeight: FontWeight.w600,
+                      color: isActive ? Colors.white : Colors.black,
+                      fontWeight: FontWeight.bold,
                       fontSize: 12,
                     ),
                   ),
@@ -239,9 +228,10 @@ class _SetupScreenState extends State<SetupScreen> {
         const SizedBox(height: 6),
         Text(
           label,
-          style: TextStyle(
+          style: GoogleFonts.bebasNeue(
             fontSize: 11,
-            color: isActive ? AppTheme.textSecondary : AppTheme.textMuted,
+            color: isActive ? AppTheme.primary : Colors.black,
+            letterSpacing: 0.5,
           ),
         ),
       ],
@@ -249,14 +239,13 @@ class _SetupScreenState extends State<SetupScreen> {
   }
 
   Widget _stepLine(int afterStep) {
-    final isActive = _currentStep > afterStep;
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         width: 60,
         height: 2,
-        color: isActive ? AppTheme.primary : AppTheme.surfaceBorder,
+        color: AppTheme.border,
       ),
     );
   }
@@ -266,38 +255,42 @@ class _SetupScreenState extends State<SetupScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Required Permissions',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+          'REQUIRED PERMISSIONS',
+          style: GoogleFonts.bebasNeue(fontSize: 20, letterSpacing: 0.5, color: Colors.black),
         ),
         const SizedBox(height: 8),
         Text(
           'OpenRelay needs these permissions to send and receive SMS on your behalf.',
-          style: TextStyle(color: AppTheme.textSecondary, height: 1.5),
+          style: GoogleFonts.roboto(
+            color: Colors.black87,
+            height: 1.5,
+            fontSize: 13,
+          ),
         ),
         const SizedBox(height: 24),
         _permissionTile(
-          icon: Icons.sms_rounded,
+          icon: FontAwesomeIcons.commentSms,
           title: 'SMS',
           subtitle: 'Send and receive SMS messages',
           granted: _smsGranted,
         ),
         const SizedBox(height: 12),
         _permissionTile(
-          icon: Icons.phone_android_rounded,
+          icon: FontAwesomeIcons.mobile,
           title: 'Phone State',
           subtitle: 'Read carrier and signal info',
           granted: _phoneGranted,
         ),
         const SizedBox(height: 12),
         _permissionTile(
-          icon: Icons.notifications_rounded,
+          icon: FontAwesomeIcons.solidBell,
           title: 'Notifications',
           subtitle: 'Show service status notification',
           granted: _notificationGranted,
         ),
         const SizedBox(height: 12),
         _permissionTile(
-          icon: Icons.location_on_rounded,
+          icon: FontAwesomeIcons.locationDot,
           title: 'GPS Location',
           subtitle: 'Send device location updates to backend',
           granted: _locationGranted,
@@ -305,20 +298,22 @@ class _SetupScreenState extends State<SetupScreen> {
         const SizedBox(height: 32),
         SizedBox(
           width: double.infinity,
+          height: 50,
           child: ElevatedButton.icon(
             onPressed: (_smsGranted && _phoneGranted && _locationGranted)
                 ? () => setState(() => _currentStep = 1)
                 : _requestPermissions,
-            icon: Icon(
-              (_smsGranted && _phoneGranted && _locationGranted) ? Icons.arrow_forward : Icons.security_rounded,
+            icon: FaIcon(
+              (_smsGranted && _phoneGranted && _locationGranted) ? FontAwesomeIcons.arrowRight : FontAwesomeIcons.shieldHalved,
+              size: 16,
             ),
             label: Text(
-              (_smsGranted && _phoneGranted && _locationGranted) ? 'Continue' : 'Grant Permissions',
+              (_smsGranted && _phoneGranted && _locationGranted) ? 'CONTINUE' : 'GRANT PERMISSIONS',
             ),
           ),
         ),
       ],
-    ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.05, end: 0);
+    );
   }
 
   Widget _permissionTile({
@@ -330,10 +325,10 @@ class _SetupScreenState extends State<SetupScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppTheme.surfaceCard,
-        borderRadius: BorderRadius.circular(12),
+        color: Colors.white,
         border: Border.all(
-          color: granted ? AppTheme.accentGreen.withValues(alpha: 0.3) : AppTheme.surfaceBorder,
+          color: AppTheme.border,
+          width: 1,
         ),
       ),
       child: Row(
@@ -342,26 +337,28 @@ class _SetupScreenState extends State<SetupScreen> {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: (granted ? AppTheme.accentGreen : AppTheme.primary).withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(10),
+              color: granted ? AppTheme.accentGreen.withOpacity(0.12) : AppTheme.primary.withOpacity(0.12),
+              border: Border.all(color: AppTheme.border, width: 1),
             ),
-            child: Icon(icon, color: granted ? AppTheme.accentGreen : AppTheme.primary, size: 22),
+            child: Center(
+              child: FaIcon(icon, color: granted ? AppTheme.accentGreen : AppTheme.primary, size: 20),
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                 const SizedBox(height: 2),
-                Text(subtitle, style: TextStyle(color: AppTheme.textMuted, fontSize: 13)),
+                Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
               ],
             ),
           ),
-          Icon(
-            granted ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
-            color: granted ? AppTheme.accentGreen : AppTheme.textMuted,
-            size: 24,
+          FaIcon(
+            granted ? FontAwesomeIcons.solidCircleCheck : FontAwesomeIcons.circle,
+            color: granted ? AppTheme.accentGreen : Colors.black45,
+            size: 22,
           ),
         ],
       ),
@@ -375,13 +372,21 @@ class _SetupScreenState extends State<SetupScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Server Configuration',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+            'SERVER CONFIGURATION',
+            style: GoogleFonts.bebasNeue(
+              fontSize: 20,
+              letterSpacing: 0.5,
+              color: Colors.black,
+            ),
           ),
           const SizedBox(height: 8),
           Text(
             'Enter your OpenRelay backend server URL and give this device a name.',
-            style: TextStyle(color: AppTheme.textSecondary, height: 1.5),
+            style: GoogleFonts.roboto(
+              color: Colors.black87,
+              height: 1.5,
+              fontSize: 13,
+            ),
           ),
           const SizedBox(height: 24),
           TextFormField(
@@ -389,7 +394,10 @@ class _SetupScreenState extends State<SetupScreen> {
             decoration: InputDecoration(
               labelText: 'Server URL',
               hintText: 'http://192.168.1.100:8000',
-              prefixIcon: const Icon(Icons.dns_rounded),
+              prefixIcon: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: FaIcon(FontAwesomeIcons.server, size: 16),
+              ),
               suffixIcon: _isTesting
                   ? const Padding(
                       padding: EdgeInsets.all(12),
@@ -402,7 +410,7 @@ class _SetupScreenState extends State<SetupScreen> {
                   : _serverReachable
                       ? const Icon(Icons.check_circle, color: AppTheme.accentGreen)
                       : IconButton(
-                          icon: const Icon(Icons.wifi_find_rounded),
+                          icon: const FaIcon(FontAwesomeIcons.wifi, size: 16),
                           onPressed: _testConnection,
                           tooltip: 'Test connection',
                         ),
@@ -422,7 +430,10 @@ class _SetupScreenState extends State<SetupScreen> {
             decoration: const InputDecoration(
               labelText: 'Device Name',
               hintText: 'My Android Phone',
-              prefixIcon: Icon(Icons.smartphone_rounded),
+              prefixIcon: Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: FaIcon(FontAwesomeIcons.mobileScreen, size: 16),
+              ),
             ),
             validator: (value) {
               if (value == null || value.isEmpty) return 'Device name is required';
@@ -434,13 +445,13 @@ class _SetupScreenState extends State<SetupScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.accentRed.withValues(alpha: 0.1),
+                color: AppTheme.accentRed.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppTheme.accentRed.withValues(alpha: 0.3)),
+                border: Border.all(color: AppTheme.accentRed.withOpacity(0.3)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, color: AppTheme.accentRed, size: 20),
+                  const FaIcon(FontAwesomeIcons.circleExclamation, color: AppTheme.accentRed, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -466,7 +477,7 @@ class _SetupScreenState extends State<SetupScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.rocket_launch_rounded),
+                  : const FaIcon(FontAwesomeIcons.rocket, size: 16),
               label: Text(_isLoading ? 'Registering...' : 'Register & Connect'),
             ),
           ),
@@ -493,7 +504,7 @@ class _SetupScreenState extends State<SetupScreen> {
           child: CircularProgressIndicator(
             strokeWidth: 3,
             color: AppTheme.primary,
-            backgroundColor: AppTheme.surfaceBorder,
+            backgroundColor: Theme.of(context).brightness == Brightness.light ? const Color(0xFFE2E8F0) : AppTheme.darkBorder,
           ),
         ),
         const SizedBox(height: 32),
