@@ -4,6 +4,7 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import '../constants.dart';
 import '../models/models.dart';
 import '../services/api_client.dart';
@@ -123,12 +124,59 @@ class AppState extends ChangeNotifier {
     // Load job stats
     await refreshJobStats();
 
-    // If setup is complete and service was running, auto-connect
-    if (_isSetupComplete && _serviceRunning && _serverUrl.isNotEmpty && _deviceToken.isNotEmpty) {
+    // Check if background service is running
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (isRunning) {
+      _serviceRunning = true;
+      _setupBackgroundServiceListeners(service);
+    } else if (_isSetupComplete && _serviceRunning && _serverUrl.isNotEmpty && _deviceToken.isNotEmpty) {
       startService();
     }
 
     _initialized = true;
+    notifyListeners();
+  }
+
+  void _setupBackgroundServiceListeners(FlutterBackgroundService service) {
+    service.on('connection_state').listen((event) {
+      if (event != null) {
+        final stateStr = event['state'] as String;
+        _connectionState = WsConnectionState.values.firstWhere(
+          (e) => e.name == stateStr,
+          orElse: () => WsConnectionState.disconnected,
+        );
+        notifyListeners();
+      }
+    });
+
+    service.on('log').listen((event) {
+      if (event != null) {
+        final msg = event['message'] as String;
+        _addLogDirectly(msg);
+      }
+    });
+
+    service.on('sms_result').listen((event) {
+      refreshJobStats();
+    });
+
+    service.on('sensor_update').listen((event) {
+      if (event != null) {
+        if (event['battery'] != null) _battery = event['battery'] as int;
+        if (event['carrier'] != null) _carrier = event['carrier'] as String;
+        if (event['latitude'] != null) _latitude = event['latitude'] as double;
+        if (event['longitude'] != null) _longitude = event['longitude'] as double;
+        notifyListeners();
+      }
+    });
+  }
+
+  void _addLogDirectly(String message) {
+    _logs.insert(0, message);
+    if (_logs.length > 200) {
+      _logs.removeRange(200, _logs.length);
+    }
     notifyListeners();
   }
 
@@ -141,12 +189,17 @@ class AppState extends ChangeNotifier {
 
   void setDevMode(bool value) async {
     _devMode = value;
-    if (_wsService != null) {
-      _wsService!.devMode = value;
-    }
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('dev_mode', value);
     _addLog('Developer Mode: ${value ? "ENABLED" : "DISABLED"}');
+    
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (isRunning) {
+      service.invoke('update_config', {
+        'dev_mode': value,
+      });
+    }
     notifyListeners();
   }
 
@@ -233,55 +286,40 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Start the WebSocket service.
-  void startService() {
+  /// Start the Background service.
+  void startService() async {
     if (_serverUrl.isEmpty || _deviceToken.isEmpty) return;
 
-    _wsService?.dispose();
-    _wsService = WebSocketService(serverUrl: _serverUrl, token: _deviceToken);
-    _wsService!.devMode = _devMode;
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (!isRunning) {
+      await service.startService();
+    }
 
-    _wsService!.onStateChanged = (state) {
-      _connectionState = state;
-      notifyListeners();
-    };
-
-    _wsService!.onSmsResult = (jobId, status) {
-      refreshJobStats();
-    };
-
-    _wsService!.onLog = (message) {
-      _addLog(message);
-    };
-
-    _wsService!.connect();
+    _setupBackgroundServiceListeners(service);
     _serviceRunning = true;
 
-    // Start sensor monitoring
-    _startSensorMonitoring();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.prefServiceEnabled, true);
 
-    // Persist service state
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setBool(AppConstants.prefServiceEnabled, true);
-    });
-
-    _addLog('Service started.');
+    _addLog('Background service started.');
     notifyListeners();
   }
 
-  /// Stop the WebSocket service.
-  void stopService() {
-    _wsService?.disconnect();
-    _wsService = null;
+  /// Stop the Background service.
+  void stopService() async {
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (isRunning) {
+      service.invoke('stop_service');
+    }
     _serviceRunning = false;
     _connectionState = WsConnectionState.disconnected;
-    _sensorTimer?.cancel();
 
-    SharedPreferences.getInstance().then((prefs) {
-      prefs.setBool(AppConstants.prefServiceEnabled, false);
-    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(AppConstants.prefServiceEnabled, false);
 
-    _addLog('Service stopped.');
+    _addLog('Background service stopped.');
     notifyListeners();
   }
 
@@ -292,53 +330,6 @@ class AppState extends ChangeNotifier {
     } else {
       startService();
     }
-  }
-
-  /// Start monitoring battery and connectivity sensors.
-  void _startSensorMonitoring() {
-    _sensorTimer?.cancel();
-    _sensorTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
-      await _updateSensorData();
-    });
-    _updateSensorData();
-  }
-
-  Future<void> _updateSensorData() async {
-    try {
-      _battery = await _batteryPlugin.batteryLevel;
-    } catch (_) {}
-
-    // Fetch Carrier from native side
-    try {
-      _carrier = await SmsSender.getCarrierName();
-    } catch (_) {}
-
-    // Fetch GPS coordinates
-    try {
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (serviceEnabled) {
-        final permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.always || permission == LocationPermission.whileInUse) {
-          final position = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.low,
-            timeLimit: const Duration(seconds: 5),
-          );
-          _latitude = position.latitude;
-          _longitude = position.longitude;
-        }
-      }
-    } catch (_) {}
-
-    // Update WebSocket service with latest sensor data
-    if (_wsService != null) {
-      _wsService!.currentBattery = _battery;
-      _wsService!.currentSignal = _signal;
-      _wsService!.currentCarrier = _carrier.isNotEmpty ? _carrier : null;
-      _wsService!.currentLatitude = _latitude;
-      _wsService!.currentLongitude = _longitude;
-    }
-
-    notifyListeners();
   }
 
   /// Refresh SMS job statistics from local database.
@@ -380,16 +371,22 @@ class AppState extends ChangeNotifier {
 
   /// Update server URL dynamically and restart WebSocket service if active.
   Future<void> updateServerUrl(String newUrl) async {
+    _urlUpdate(newUrl);
+  }
+
+  Future<void> _urlUpdate(String newUrl) async {
     _serverUrl = newUrl.trimRight().replaceAll(RegExp(r'/+$'), '');
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(AppConstants.prefServerUrl, _serverUrl);
     _addLog('Server URL updated to $_serverUrl');
     
-    // Reset connection if running
-    if (_serviceRunning) {
-      _addLog('Restarting background service with new URL...');
-      stopService();
-      startService();
+    final service = FlutterBackgroundService();
+    final isRunning = await service.isRunning();
+    if (isRunning) {
+      service.invoke('update_config', {
+        'server_url': _serverUrl,
+        'token': _deviceToken,
+      });
     }
     notifyListeners();
   }

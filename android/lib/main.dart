@@ -5,11 +5,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'providers/app_state.dart';
 import 'screens/setup_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/background_service.dart';
 import 'logo_painter.dart';
 import 'theme.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize background service
+  await initializeBackgroundService();
 
   // Force portrait orientation
   SystemChrome.setPreferredOrientations([
