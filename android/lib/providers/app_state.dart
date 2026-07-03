@@ -37,6 +37,9 @@ class AppState extends ChangeNotifier {
   String _deviceName = '';
   String get deviceName => _deviceName;
 
+  bool _devMode = false;
+  bool get devMode => _devMode;
+
   // Connection state
   WsConnectionState _connectionState = WsConnectionState.disconnected;
   WsConnectionState get connectionState => _connectionState;
@@ -112,6 +115,7 @@ class AppState extends ChangeNotifier {
     }
 
     _useWhiteTheme = prefs.getBool('use_white_theme') ?? false;
+    _devMode = prefs.getBool('dev_mode') ?? false;
 
     // Load device info
     await _loadDeviceInfo();
@@ -132,6 +136,17 @@ class AppState extends ChangeNotifier {
     _useWhiteTheme = value;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('use_white_theme', value);
+    notifyListeners();
+  }
+
+  void setDevMode(bool value) async {
+    _devMode = value;
+    if (_wsService != null) {
+      _wsService!.devMode = value;
+    }
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('dev_mode', value);
+    _addLog('Developer Mode: ${value ? "ENABLED" : "DISABLED"}');
     notifyListeners();
   }
 
@@ -224,6 +239,7 @@ class AppState extends ChangeNotifier {
 
     _wsService?.dispose();
     _wsService = WebSocketService(serverUrl: _serverUrl, token: _deviceToken);
+    _wsService!.devMode = _devMode;
 
     _wsService!.onStateChanged = (state) {
       _connectionState = state;

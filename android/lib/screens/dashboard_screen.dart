@@ -1409,6 +1409,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     'THEME BACKGROUND',
                     appState.useWhiteTheme ? 'WHITE' : 'OFF-WHITE',
                     borderColor,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    appState.setDevMode(!appState.devMode);
+                  },
+                  child: _buildSettingsRow(
+                    'DEVELOPER MODE',
+                    appState.devMode ? 'ON (BYPASS CARRIER)' : 'OFF',
+                    borderColor,
                     isLast: true,
                   ),
                 ),

@@ -22,6 +22,7 @@ class WebSocketService {
   Timer? _reconnectTimer;
   int _reconnectAttempts = 0;
   bool _intentionalDisconnect = false;
+  bool devMode = false;
 
   WsConnectionState _state = WsConnectionState.disconnected;
   WsConnectionState get state => _state;
@@ -114,6 +115,30 @@ class WebSocketService {
   Future<void> _handleSmsCommand(SmsCommand command) async {
     _log('SMS Job ${command.jobId}: Sending to ${command.to}');
 
+    if (devMode) {
+      _log('SMS Job ${command.jobId}: Bypassing carrier sending (Dev Mode active)');
+      
+      // Save to local database
+      await AppDatabase.insertJob(
+        jobId: command.jobId,
+        recipient: command.to,
+        message: command.message,
+        status: 'dev',
+      );
+
+      // Send result back to server
+      final result = SmsResult(
+        type: 'RESULT',
+        jobId: command.jobId,
+        status: 'dev',
+      );
+      _sendMessage(result.toJson());
+
+      _log('SMS Job ${command.jobId}: dev (Dev Mode success)');
+      onSmsResult?.call(command.jobId, 'dev');
+      return;
+    }
+
     // Save to local database
     await AppDatabase.insertJob(
       jobId: command.jobId,
@@ -145,6 +170,7 @@ class WebSocketService {
     _log('SMS Job ${command.jobId}: $resultStatus');
     onSmsResult?.call(command.jobId, resultStatus);
   }
+
 
   /// Send a JSON message through the WebSocket.
   void _sendMessage(Map<String, dynamic> message) {
