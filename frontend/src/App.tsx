@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Smartphone, 
-  Send, 
-  RefreshCw, 
-  Battery as BatteryIcon, 
-  Signal as SignalIcon, 
-  MapPin, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Activity, 
+import {
+  Smartphone,
+  Send,
+  RefreshCw,
+  Battery as BatteryIcon,
+  Signal as SignalIcon,
+  MapPin,
+  AlertTriangle,
+  CheckCircle2,
+  Activity,
   Sliders
 } from 'lucide-react';
 
@@ -38,7 +38,7 @@ function App() {
   const [isSending, setIsSending] = useState<boolean>(false);
   const [refreshInterval, setRefreshInterval] = useState<number>(5); // seconds
   const [apiVersion, setApiVersion] = useState<'v1' | 'v2'>('v1');
-  
+
   // Theme Background toggle (White vs Off-white)
   const [useWhiteTheme, setUseWhiteTheme] = useState<boolean>(() => {
     return localStorage.getItem('web_use_white_theme') === 'true';
@@ -57,7 +57,7 @@ function App() {
       if (res.ok) {
         const data = await res.json();
         setDevices(data);
-        
+
         // Auto-select first online device if none selected
         if (data.length > 0 && !selectedDevice) {
           const firstOnline = data.find((d: Device) => d.status === 'online');
@@ -96,7 +96,7 @@ function App() {
 
     try {
       const isV2 = apiVersion === 'v2';
-      const bodyPayload = isV2 
+      const bodyPayload = isV2
         ? { device_id: selectedDevice, to: smsTo, message: smsMessage }
         : { device: selectedDevice, to: smsTo, message: smsMessage };
 
@@ -151,7 +151,7 @@ function App() {
 
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
           {/* Theme background switcher */}
-          <button 
+          <button
             onClick={toggleTheme}
             className="flex items-center gap-2 text-xs bg-white hover:bg-gray-150 border-2 border-[#111111] font-black uppercase px-3.5 py-2.5 transition-colors"
           >
@@ -160,8 +160,8 @@ function App() {
 
           <div className="flex items-center gap-2 text-xs bg-white border-2 border-[#111111] p-2.5 font-bold">
             <span className="text-gray-600 uppercase tracking-wide text-[10px] font-black">API Version:</span>
-            <select 
-              value={apiVersion} 
+            <select
+              value={apiVersion}
               onChange={(e) => setApiVersion(e.target.value as 'v1' | 'v2')}
               className="bg-transparent text-[#E50012] focus:outline-none font-black cursor-pointer uppercase"
             >
@@ -172,8 +172,8 @@ function App() {
 
           <div className="flex items-center gap-2 text-xs bg-white border-2 border-[#111111] p-2.5 font-bold">
             <span className="text-gray-600 uppercase tracking-wide text-[10px] font-black">Autorefresh:</span>
-            <select 
-              value={refreshInterval} 
+            <select
+              value={refreshInterval}
               onChange={(e) => setRefreshInterval(Number(e.target.value))}
               className="bg-transparent text-[#E50012] focus:outline-none font-black cursor-pointer uppercase"
             >
@@ -184,8 +184,8 @@ function App() {
             </select>
           </div>
 
-          <button 
-            onClick={fetchDevices} 
+          <button
+            onClick={fetchDevices}
             className="flex items-center gap-2 text-xs bg-[#E50012] hover:bg-[#B3000E] border-2 border-[#111111] text-white font-black uppercase px-4 py-2.5 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
@@ -196,7 +196,7 @@ function App() {
 
       {/* Main Grid */}
       <main className="max-w-7xl mx-auto space-y-6">
-        
+
         {/* Stats Cards */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
@@ -240,7 +240,7 @@ function App() {
 
         {/* Dashboard Panels */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          
+
           {/* Registered Devices List */}
           <section className="lg:col-span-2 space-y-4">
             <h2 className="font-bebas text-2xl font-bold tracking-wider text-[#111111] flex items-center gap-2">
@@ -258,7 +258,7 @@ function App() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {devices.map((device) => {
                   const isOnline = device.status === 'online';
-                  
+
                   // Custom battery percentage bar logic
                   const batteryLevel = device.battery !== null ? Math.max(0, Math.min(100, device.battery)) : 64;
                   const redFlex = batteryLevel;
@@ -268,11 +268,10 @@ function App() {
                   const signalStrength = device.signal !== null ? device.signal : 3;
 
                   return (
-                    <div 
-                      key={device.uuid} 
-                      className={`bg-white border-2 border-[#111111] p-5 transition-all duration-150 hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(17,17,17,1)] ${
-                        isOnline ? 'opacity-100' : 'opacity-70'
-                      }`}
+                    <div
+                      key={device.uuid}
+                      className={`bg-white border-2 border-[#111111] p-5 transition-all duration-150 hover:translate-x-0.5 hover:translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(17,17,17,1)] ${isOnline ? 'opacity-100' : 'opacity-70'
+                        }`}
                     >
                       {/* Name & Status Header */}
                       <div className="flex justify-between items-start mb-3.5">
@@ -284,9 +283,8 @@ function App() {
                             UUID: {device.uuid}
                           </p>
                         </div>
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 border-2 border-[#111111] text-[10px] font-black uppercase ${
-                          isOnline ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-gray-150 text-gray-600'
-                        }`}>
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 border-2 border-[#111111] text-[10px] font-black uppercase ${isOnline ? 'bg-[#E8F5E9] text-[#2E7D32]' : 'bg-gray-150 text-gray-600'
+                          }`}>
                           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#2E7D32] animate-pulse' : 'bg-gray-500'}`}></span>
                           {device.status}
                         </span>
@@ -320,9 +318,8 @@ function App() {
                         <div className="flex flex-col items-start">
                           <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Battery</span>
                           <div className="flex items-center gap-1.5 mt-1">
-                            <BatteryIcon className={`w-4 h-4 ${
-                              device.battery && device.battery < 20 ? 'text-[#E50012] animate-bounce' : 'text-[#111111]'
-                            }`} />
+                            <BatteryIcon className={`w-4 h-4 ${device.battery && device.battery < 20 ? 'text-[#E50012] animate-bounce' : 'text-[#111111]'
+                              }`} />
                             <span className="font-bebas text-lg font-bold text-[#111111]">{device.battery !== null ? `${device.battery}%` : 'N/A'}</span>
                           </div>
                           {/* Custom Flat Battery Bar (Red left, Black right) matching Mobile App */}
@@ -342,13 +339,13 @@ function App() {
                                 const barHeight = 8 + idx * 6;
                                 const isFilled = idx < signalStrength;
                                 return (
-                                  <div 
-                                    key={idx} 
-                                    className="w-[4.5px] border border-[#111111]" 
-                                    style={{ 
-                                      height: `${barHeight}px`, 
-                                      backgroundColor: isFilled ? '#111111' : '#E2E8F0' 
-                                    }} 
+                                  <div
+                                    key={idx}
+                                    className="w-[4.5px] border border-[#111111]"
+                                    style={{
+                                      height: `${barHeight}px`,
+                                      backgroundColor: isFilled ? '#111111' : '#E2E8F0'
+                                    }}
                                   />
                                 );
                               })}
@@ -363,7 +360,7 @@ function App() {
                           <div className="flex items-center gap-1 mt-1 text-[#111111] w-full">
                             <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                             <span className="font-mono font-bold text-[9px] truncate block w-full">
-                              {device.latitude !== null && device.longitude !== null 
+                              {device.latitude !== null && device.longitude !== null
                                 ? `${device.latitude.toFixed(3)}, ${device.longitude.toFixed(3)}`
                                 : 'NO GPS'
                               }
@@ -377,7 +374,7 @@ function App() {
               </div>
             )}
           </section>
- 
+
           {/* Quick Send SMS Form */}
           <section className="space-y-4">
             <h2 className="font-bebas text-2xl font-bold tracking-wider text-[#111111] flex items-center gap-2">
@@ -387,7 +384,7 @@ function App() {
 
             <div className="bg-white border-2 border-[#111111] p-5">
               <form onSubmit={handleSendSms} className="space-y-4">
-                
+
                 {/* Target device select dropdown */}
                 <div>
                   <label className="block text-[10px] font-black text-gray-700 mb-1.5 uppercase tracking-wider font-roboto">Target Device</label>
@@ -449,11 +446,10 @@ function App() {
 
               {/* Status Alert panel */}
               {sendStatus && (
-                <div className={`mt-4 p-4 border-2 flex gap-3 text-xs rounded-none ${
-                  sendStatus.success 
-                    ? 'bg-[#E8F5E9] border-[#2E7D32] text-[#2E7D32]' 
+                <div className={`mt-4 p-4 border-2 flex gap-3 text-xs rounded-none ${sendStatus.success
+                    ? 'bg-[#E8F5E9] border-[#2E7D32] text-[#2E7D32]'
                     : 'bg-[#FFEBEE] border-[#E50012] text-[#E50012]'
-                }`}>
+                  }`}>
                   {sendStatus.success ? (
                     <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
                   ) : (
