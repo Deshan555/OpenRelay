@@ -1,10 +1,9 @@
 import json
 import datetime
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, Depends
-from sqlalchemy.orm import Session
+from bson import ObjectId
 
-from app.database import get_db
-from app.models import Device, SMSJob
+from app.database_mongo import get_mongo_db
 from app.websocket import manager
 from app.auth import verify_token
 from app.logger import logger
@@ -15,7 +14,7 @@ router = APIRouter(tags=["websocket"])
 async def websocket_endpoint(
     websocket: WebSocket,
     token: str = Query(...),
-    db: Session = Depends(get_db)
+    db = Depends(get_mongo_db)
 ):
     # Authenticate device
     try:
@@ -27,7 +26,7 @@ async def websocket_endpoint(
         return
 
     # Check if device registered in DB
-    device = db.query(Device).filter(Device.uuid == device_uuid).first()
+    device = await db.devices.find_one({"uuid": device_uuid})
     if not device:
         logger.warning(f"V2: Unregistered device '{device_uuid}' attempted connection.")
         await websocket.close(code=1008)
@@ -35,9 +34,13 @@ async def websocket_endpoint(
 
     # Accept connection and mark device online with version=2
     await manager.connect(device_uuid, websocket, version=2)
-    device.status = "online"
-    device.last_seen = datetime.datetime.utcnow()
-    db.commit()
+    await db.devices.update_one(
+        {"uuid": device_uuid},
+        {"$set": {
+            "status": "online",
+            "last_seen": datetime.datetime.utcnow()
+        }}
+    )
 
     try:
         while True:
@@ -51,18 +54,28 @@ async def websocket_endpoint(
                     job_id = message.get("job_id")
                     status = message.get("status")
                     if job_id and status:
-                        job = db.query(SMSJob).filter(SMSJob.id == int(job_id)).first()
-                        if job:
-                            job.status = status
-                            job.sent_at = datetime.datetime.utcnow()
-                            db.commit()
+                        try:
+                            oid = ObjectId(job_id)
+                        except Exception:
+                            logger.error(f"V2: Invalid ObjectId '{job_id}' received.")
+                            oid = None
                             
-                            if status == "SENT":
-                                logger.success(f"V2: SMS Job {job_id} sent successfully by device {device_uuid}.")
+                        if oid:
+                            job = await db.sms_jobs.find_one({"_id": oid})
+                            if job:
+                                await db.sms_jobs.update_one(
+                                    {"_id": oid},
+                                    {"$set": {
+                                        "status": status,
+                                        "sent_at": datetime.datetime.utcnow()
+                                    }}
+                                )
+                                if status == "SENT":
+                                    logger.success(f"V2: SMS Job {job_id} sent successfully by device {device_uuid}.")
+                                else:
+                                    logger.error(f"V2: SMS Job {job_id} failed on device {device_uuid} with status: {status}.")
                             else:
-                                logger.error(f"V2: SMS Job {job_id} failed on device {device_uuid} with status: {status}.")
-                        else:
-                            logger.warning(f"V2: Result reported for unknown SMS Job {job_id}.")
+                                logger.warning(f"V2: Result reported for unknown SMS Job {job_id}.")
 
                 # Handle status/health report from device
                 elif msg_type == "STATUS_UPDATE":
@@ -72,18 +85,21 @@ async def websocket_endpoint(
                     latitude = message.get("latitude")
                     longitude = message.get("longitude")
                     
-                    device.last_seen = datetime.datetime.utcnow()
+                    update_fields = {
+                        "last_seen": datetime.datetime.utcnow()
+                    }
                     if battery is not None:
-                        device.battery = battery
+                        update_fields["battery"] = battery
                     if signal is not None:
-                        device.signal = signal
+                        update_fields["signal"] = signal
                     if carrier is not None:
-                        device.carrier = carrier
+                        update_fields["carrier"] = carrier
                     if latitude is not None:
-                        device.latitude = latitude
+                        update_fields["latitude"] = latitude
                     if longitude is not None:
-                        device.longitude = longitude
-                    db.commit()
+                        update_fields["longitude"] = longitude
+                        
+                    await db.devices.update_one({"uuid": device_uuid}, {"$set": update_fields})
                     logger.debug(f"V2: Status update from {device_uuid} - Battery: {battery}%, Signal: {signal}")
 
             except json.JSONDecodeError:
@@ -91,8 +107,11 @@ async def websocket_endpoint(
 
     except WebSocketDisconnect:
         manager.disconnect(device_uuid)
-        db.refresh(device)
-        device.status = "offline"
-        device.last_seen = datetime.datetime.utcnow()
-        db.commit()
+        await db.devices.update_one(
+            {"uuid": device_uuid},
+            {"$set": {
+                "status": "offline",
+                "last_seen": datetime.datetime.utcnow()
+            }}
+        )
         logger.warning(f"V2: WebSocket connection closed for device {device_uuid}.")

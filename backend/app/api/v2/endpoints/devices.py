@@ -1,9 +1,7 @@
 import datetime
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Device
+from app.database_mongo import get_mongo_db
 from app.schemas import DeviceRegisterRequest, DeviceRegisterResponseV2, DeviceResponseV2
 from app.auth import create_access_token
 from app.logger import logger
@@ -17,9 +15,10 @@ router = APIRouter(prefix="/devices", tags=["devices"])
     summary="Get all registered devices (v2)",
     description="Retrieves a list of all devices registered on the server (v2)."
 )
-def get_all_devices(db: Session = Depends(get_db)):
+async def get_all_devices(db = Depends(get_mongo_db)):
     logger.debug("V2: Fetch all registered devices requested.")
-    devices = db.query(Device).all()
+    cursor = db.devices.find({})
+    devices = await cursor.to_list(length=100)
     return devices
 
 @router.post(
@@ -29,41 +28,51 @@ def get_all_devices(db: Session = Depends(get_db)):
     summary="Register or update a device (v2)",
     description="Registers a new device or updates an existing one, returning a JWT token with snake_case response payload keys (v2)."
 )
-def register_device(request: DeviceRegisterRequest, db: Session = Depends(get_db)):
+async def register_device(request: DeviceRegisterRequest, db = Depends(get_mongo_db)):
     # Check if device already exists
-    device = db.query(Device).filter(Device.uuid == request.uuid).first()
+    device = await db.devices.find_one({"uuid": request.uuid})
     
     token = create_access_token(data={"sub": request.uuid})
+    now = datetime.datetime.utcnow()
     
     if device:
         # Update existing device info
-        device.name = request.name or device.name
-        device.model = request.model or device.model
-        device.android_version = request.android_version or device.android_version
-        device.carrier = request.carrier or device.carrier
-        device.last_seen = datetime.datetime.utcnow()
-        device.token = token
+        update_data = {
+            "token": token,
+            "last_seen": now
+        }
+        if request.name is not None:
+             update_data["name"] = request.name
+        if request.model is not None:
+             update_data["model"] = request.model
+        if request.android_version is not None:
+             update_data["android_version"] = request.android_version
+        if request.carrier is not None:
+             update_data["carrier"] = request.carrier
         if request.latitude is not None:
-             device.latitude = request.latitude
+             update_data["latitude"] = request.latitude
         if request.longitude is not None:
-             device.longitude = request.longitude
+             update_data["longitude"] = request.longitude
+             
+        await db.devices.update_one({"uuid": request.uuid}, {"$set": update_data})
         logger.info(f"V2: Updated registration info for device UUID: {request.uuid}")
     else:
         # Create new device
-        device = Device(
-            uuid=request.uuid,
-            name=request.name,
-            model=request.model,
-            android_version=request.android_version,
-            carrier=request.carrier,
-            latitude=request.latitude,
-            longitude=request.longitude,
-            token=token
-        )
-        db.add(device)
+        device_doc = {
+            "uuid": request.uuid,
+            "name": request.name,
+            "model": request.model,
+            "android_version": request.android_version,
+            "carrier": request.carrier,
+            "latitude": request.latitude,
+            "longitude": request.longitude,
+            "token": token,
+            "status": "offline",
+            "last_seen": now,
+            "battery": None,
+            "signal": None
+        }
+        await db.devices.insert_one(device_doc)
         logger.success(f"V2: Registered new device UUID: {request.uuid}")
     
-    db.commit()
-    db.refresh(device)
-    
-    return DeviceRegisterResponseV2(device_id=device.uuid, token=token)
+    return DeviceRegisterResponseV2(device_id=request.uuid, token=token)

@@ -8,6 +8,9 @@ from app.config import settings
 from app.database import Base, engine
 from app.logger import logger
 
+from contextlib import asynccontextmanager
+from app.database_mongo import mongo_manager, get_mongo_client
+
 # Import versioned routers
 from app.api.v1.router import api_router as api_router_v1
 from app.api.v2.router import api_router as api_router_v2
@@ -17,6 +20,18 @@ logger.info("Initializing database tables...")
 Base.metadata.create_all(bind=engine)
 logger.success("Database tables initialized successfully.")
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize MongoDB client
+    logger.info(f"Connecting to MongoDB at {settings.MONGO_URI}...")
+    get_mongo_client()
+    logger.success("Connected to MongoDB successfully.")
+    yield
+    # Shutdown: Close MongoDB connection
+    if mongo_manager.client:
+        mongo_manager.client.close()
+        logger.info("Closed MongoDB connection.")
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description=settings.PROJECT_DESCRIPTION,
@@ -24,6 +39,7 @@ app = FastAPI(
     docs_url=settings.DOCS_URL if settings.ENABLE_DOCS else None,
     redoc_url=settings.REDOC_URL if settings.ENABLE_DOCS else None,
     openapi_url=settings.OPENAPI_URL if settings.ENABLE_DOCS else None,
+    lifespan=lifespan,
 )
 
 app.add_middleware(

@@ -96,7 +96,7 @@ class SMSSendRequestV2(BaseModel):
     message: str
 
 class SMSSendResponseV2(BaseModel):
-    job_id: int  # snake_case instead of jobId
+    job_id: str  # snake_case instead of jobId, changed to str for MongoDB ObjectIds
     status: str
 
 class SMSBatchRequestV2(BaseModel):
