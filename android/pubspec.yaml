@@ -41,6 +41,8 @@ dependencies:
   # Utils
   intl: ^0.20.0
   uuid: ^4.4.0
+  sms_channel:
+    path: ./sms_channel
 
 dev_dependencies:
   flutter_test:

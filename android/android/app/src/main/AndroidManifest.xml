@@ -27,7 +27,8 @@
     <application
         android:label="OpenRelay"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -47,15 +48,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Boot Receiver to auto-start service -->
-        <receiver
-            android:name="com.openrelay.openrelay.BootReceiver"
-            android:exported="true"
-            android:enabled="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
+        <!-- Boot receiver is managed by flutter_background_service -->
 
         <!-- SMS Receiver for incoming SMS -->
         <receiver
