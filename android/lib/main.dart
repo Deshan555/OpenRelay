@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'providers/app_state.dart';
 import 'screens/setup_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'logo_painter.dart';
 import 'theme.dart';
 
 void main() {
@@ -14,12 +16,9 @@ void main() {
     DeviceOrientation.portraitUp,
   ]);
 
-  // Set system UI overlay style for dark theme
+  // Set system UI overlay style with transparent status bar
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
-    statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: AppTheme.surface,
-    systemNavigationBarIconBrightness: Brightness.light,
   ));
 
   runApp(const OpenRelayApp());
@@ -32,15 +31,25 @@ class OpenRelayApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
       create: (_) => AppState()..initialize(),
-      child: MaterialApp(
-        title: 'OpenRelay',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
-        routes: {
-          '/setup': (_) => const SetupScreen(),
-          '/dashboard': (_) => const DashboardScreen(),
+      child: Consumer<AppState>(
+        builder: (context, appState, _) {
+          return MaterialApp(
+            title: 'OpenRelay',
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.lightTheme.copyWith(
+              scaffoldBackgroundColor: appState.useWhiteTheme ? Colors.white : AppTheme.background,
+              appBarTheme: AppTheme.lightTheme.appBarTheme.copyWith(
+                backgroundColor: appState.useWhiteTheme ? Colors.white : AppTheme.background,
+              ),
+            ),
+            themeMode: ThemeMode.light,
+            routes: {
+              '/setup': (_) => const SetupScreen(),
+              '/dashboard': (_) => const DashboardScreen(),
+            },
+            home: const _AppRouter(),
+          );
         },
-        home: const _AppRouter(),
       ),
     );
   }
@@ -57,29 +66,66 @@ class _AppRouter extends StatelessWidget {
         // Show loading while initializing
         if (!appState.initialized) {
           return Scaffold(
-            body: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 64,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [AppTheme.primary, AppTheme.accent],
+            backgroundColor: appState.useWhiteTheme ? Colors.white : AppTheme.background,
+            body: Stack(
+              children: [
+                Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CustomPaint(
+                        size: const Size(120, 120),
+                        painter: AntennaLogoPainter(color: AppTheme.primary),
                       ),
-                      borderRadius: BorderRadius.circular(16),
+                      const SizedBox(height: 24),
+                      Text(
+                        'OPENRELAY',
+                        style: GoogleFonts.bebasNeue(
+                          fontSize: 56,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        width: 50,
+                        height: 4,
+                        color: AppTheme.primary,
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'RELIABLE. SECURE. REAL-TIME.',
+                        style: GoogleFonts.roboto(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 2.0,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: 60,
+                    color: AppTheme.primary,
+                    alignment: Alignment.center,
+                    child: Text(
+                      'CONNECT. DELIVER. AUTOMATE.',
+                      style: GoogleFonts.roboto(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.5,
+                      ),
                     ),
-                    child: const Icon(Icons.cell_tower_rounded, size: 32, color: Colors.white),
                   ),
-                  const SizedBox(height: 24),
-                  const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
         }
