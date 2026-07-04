@@ -91,6 +91,7 @@ class DeviceResponseV2(BaseModel):
     last_seen: datetime
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    regular_interval: Optional[float] = 2.0
 
     class Config:
         from_attributes = True
@@ -110,5 +111,22 @@ class SMSBatchRequestV2(BaseModel):
 
 class SMSBatchResponseV2(BaseModel):
     jobs: List[SMSSendResponseV2]
+
+class CampaignRequest(BaseModel):
+    message: str
+    recipients: List[str]
+    queue_type: Optional[str] = "REGULAR"
+
+class AdminCreateRequest(BaseModel):
+    username: str
+    password: str
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+class AdminLoginResponse(BaseModel):
+    token: str
+    username: str
 
 
