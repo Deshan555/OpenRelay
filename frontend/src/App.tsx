@@ -184,35 +184,37 @@ function App() {
 
       <main className="max-w-7xl mx-auto space-y-6">
         {/* Stats Cards */}
-        <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
-            <div>
-              <span className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">Device Gateways</span>
-              <span className="font-bebas text-4xl font-bold text-[#111111] tracking-wide mt-1 block">{onlineDevices} / {totalDevices} Online</span>
+        {activeTab === 'devices' && (
+          <section className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
+              <div>
+                <span className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">Device Gateways</span>
+                <span className="font-bebas text-4xl font-bold text-[#111111] tracking-wide mt-1 block">{onlineDevices} / {totalDevices} Online</span>
+              </div>
+              <div className="p-3 bg-[#E8F5E9] border-2 border-[#111111] text-[#2E7D32]">
+                <Smartphone className="w-6 h-6" />
+              </div>
             </div>
-            <div className="p-3 bg-[#E8F5E9] border-2 border-[#111111] text-[#2E7D32]">
-              <Smartphone className="w-6 h-6" />
+            <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
+              <div>
+                <span className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">Quick actions</span>
+                <span className="font-bebas text-4xl font-bold text-[#111111] tracking-wide mt-1 block">Live SMS Push</span>
+              </div>
+              <div className="p-3 bg-[#E3F2FD] border-2 border-[#111111] text-[#0288D1]">
+                <Send className="w-6 h-6" />
+              </div>
             </div>
-          </div>
-          <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
-            <div>
-              <span className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">Quick actions</span>
-              <span className="font-bebas text-4xl font-bold text-[#111111] tracking-wide mt-1 block">Live SMS Push</span>
+            <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
+              <div>
+                <span className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">System Access</span>
+                <span className="font-bebas text-4xl font-bold text-[#111111] tracking-wide mt-1 block">Security Enabled</span>
+              </div>
+              <div className="p-3 bg-[#FFEBEE] border-2 border-[#E50012] text-[#E50012]">
+                <Sliders className="w-6 h-6" />
+              </div>
             </div>
-            <div className="p-3 bg-[#E3F2FD] border-2 border-[#111111] text-[#0288D1]">
-              <Send className="w-6 h-6" />
-            </div>
-          </div>
-          <div className="bg-white border-2 border-[#111111] p-5 flex items-center justify-between">
-            <div>
-              <span className="block text-[10px] font-black text-gray-500 uppercase tracking-wider">System Access</span>
-              <span className="font-bebas text-4xl font-bold text-[#111111] tracking-wide mt-1 block">Security Enabled</span>
-            </div>
-            <div className="p-3 bg-[#FFEBEE] border-2 border-[#E50012] text-[#E50012]">
-              <Sliders className="w-6 h-6" />
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* Tab Navigation */}
         <div className="flex flex-wrap gap-2.5 border-b-2 border-[#111111] pb-5">
