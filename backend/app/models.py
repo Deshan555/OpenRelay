@@ -36,3 +36,17 @@ class SMSJob(Base):
     sent_at = Column(DateTime, nullable=True)
 
     device = relationship("Device", back_populates="jobs")
+
+class BulkSmsLog(Base):
+    __tablename__ = "bulk_sms_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_uuid = Column(String, ForeignKey("devices.uuid"), nullable=False)
+    phone_number = Column(String, nullable=False)
+    message = Column(String, nullable=False)
+    status = Column(String, default="PENDING")  # PENDING, SENT, FAILED
+    error_detail = Column(String, nullable=True)
+    sent_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    device = relationship("Device")
