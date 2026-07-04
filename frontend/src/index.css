@@ -14,3 +14,19 @@ body {
 .font-roboto {
   font-family: 'Roboto', sans-serif;
 }
+
+/* Neobrutalist Leaflet Popup Overrides */
+.neobrutalist-leaflet-popup .leaflet-popup-content-wrapper {
+  background: #ffffff !important;
+  color: #111111 !important;
+  border: 3px solid #111111 !important;
+  border-radius: 0px !important;
+  box-shadow: 4px 4px 0px 0px rgba(17,17,17,1) !important;
+  padding: 4px !important;
+}
+.neobrutalist-leaflet-popup .leaflet-popup-content {
+  margin: 8px 10px !important;
+}
+.neobrutalist-leaflet-popup .leaflet-popup-tip-container {
+  display: none !important;
+}
