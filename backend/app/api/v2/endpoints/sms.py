@@ -109,3 +109,20 @@ async def send_batch_sms(request: SMSBatchRequestV2, db = Depends(get_mongo_db))
             responses.append(SMSSendResponseV2(job_id=job_id, status="PENDING"))
             
     return SMSBatchResponseV2(jobs=responses)
+
+@router.get(
+    "/logs",
+    status_code=status.HTTP_200_OK,
+    summary="Get SMS job logs (v2)",
+    description="Retrieves a list of single and batch SMS jobs."
+)
+async def get_sms_logs(db = Depends(get_mongo_db)):
+    cursor = db.sms_jobs.find({}).sort([("created_at", -1)]).limit(100)
+    logs = await cursor.to_list(length=100)
+    for log in logs:
+        log["_id"] = str(log["_id"])
+        if "created_at" in log and isinstance(log["created_at"], datetime.datetime):
+            log["created_at"] = log["created_at"].isoformat()
+        if "sent_at" in log and isinstance(log["sent_at"], datetime.datetime):
+            log["sent_at"] = log["sent_at"].isoformat()
+    return logs
