@@ -24,8 +24,24 @@ logger.success("Database tables initialized successfully.")
 async def lifespan(app: FastAPI):
     # Startup: Initialize MongoDB client
     logger.info(f"Connecting to MongoDB at {settings.MONGO_URI}...")
-    get_mongo_client()
+    client = get_mongo_client()
     logger.success("Connected to MongoDB successfully.")
+    
+    # Initialize indexes
+    db = client[settings.MONGO_DB_NAME]
+    await db.sms_queue.create_index([
+        ("device_uuid", 1),
+        ("queue_type", 1),
+        ("status", 1),
+        ("created_at", 1)
+    ])
+    logger.success("SMS queue indexes initialized.")
+
+    # Start background queue manager
+    from app.queue_manager import start_queue_worker
+    start_queue_worker()
+    logger.success("Background SMS queue workers started.")
+
     yield
     # Shutdown: Close MongoDB connection
     if mongo_manager.client:
