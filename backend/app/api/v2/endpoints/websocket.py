@@ -54,6 +54,14 @@ async def websocket_endpoint(
                     job_id = message.get("job_id")
                     status = message.get("status")
                     if job_id and status:
+                        # Resolve queue worker future if one is waiting
+                        from app.queue_manager import pending_results
+                        if job_id in pending_results:
+                            try:
+                                pending_results[job_id].set_result(status)
+                            except Exception as fut_err:
+                                logger.error(f"V2: Error setting future result for {job_id}: {fut_err}")
+
                         try:
                             oid = ObjectId(job_id)
                         except Exception:
@@ -115,3 +123,5 @@ async def websocket_endpoint(
             }}
         )
         logger.warning(f"V2: WebSocket connection closed for device {device_uuid}.")
+        from app.queue_manager import reassign_device_jobs
+        await reassign_device_jobs(device_uuid, db)
