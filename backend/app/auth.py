@@ -34,3 +34,45 @@ def get_current_device_uuid(credentials: HTTPAuthorizationCredentials = Depends(
             detail="Token missing subject claim",
         )
     return uuid
+
+import hashlib
+import os
+import secrets
+
+def hash_password(password: str) -> str:
+    """Hash a password using PBKDF2 with SHA-256."""
+    salt = os.urandom(16)
+    key = hashlib.pbkdf2_hmac(
+        'sha256',
+        password.encode('utf-8'),
+        salt,
+        100000
+    )
+    return f"{salt.hex()}:{key.hex()}"
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plain password against its hashed value."""
+    try:
+        salt_hex, key_hex = hashed_password.split(':')
+        salt = bytes.fromhex(salt_hex)
+        expected_key = bytes.fromhex(key_hex)
+        key = hashlib.pbkdf2_hmac(
+            'sha256',
+            plain_password.encode('utf-8'),
+            salt,
+            100000
+        )
+        return secrets.compare_digest(key, expected_key)
+    except Exception:
+        return False
+
+def get_current_admin(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    token = credentials.credentials
+    payload = verify_token(token)
+    role = payload.get("role")
+    if role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin access required",
+        )
+    return payload
