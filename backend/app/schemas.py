@@ -56,6 +56,11 @@ class SMSBatchRequest(BaseModel):
     device: str
     messages: List[SMSBatchMessage]
 
+class BulkSmsRow(BaseModel):
+    phone_number: str
+    message: str
+    name: Optional[str] = None
+
 class SMSBatchResponse(BaseModel):
     jobs: List[SMSSendResponse]
 
