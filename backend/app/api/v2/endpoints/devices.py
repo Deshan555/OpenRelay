@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from app.database_mongo import get_mongo_db
 from app.schemas import DeviceRegisterRequest, DeviceRegisterResponseV2, DeviceResponseV2
-from app.auth import create_access_token
+from app.auth import create_access_token, get_current_admin
 from app.logger import logger
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -15,7 +15,7 @@ router = APIRouter(prefix="/devices", tags=["devices"])
     summary="Get all registered devices (v2)",
     description="Retrieves a list of all devices registered on the server (v2)."
 )
-async def get_all_devices(db = Depends(get_mongo_db)):
+async def get_all_devices(db = Depends(get_mongo_db), admin: dict = Depends(get_current_admin)):
     logger.debug("V2: Fetch all registered devices requested.")
     cursor = db.devices.find({})
     devices = await cursor.to_list(length=100)
@@ -76,3 +76,33 @@ async def register_device(request: DeviceRegisterRequest, db = Depends(get_mongo
         logger.success(f"V2: Registered new device UUID: {request.uuid}")
     
     return DeviceRegisterResponseV2(device_id=request.uuid, token=token)
+
+from pydantic import BaseModel
+
+class DeviceConfigRequest(BaseModel):
+    regular_interval: float
+
+@router.post(
+    "/{device_uuid}/config",
+    status_code=status.HTTP_200_OK,
+    summary="Update device config (v2)",
+    description="Updates configuration parameters (like regular queue dispatch interval) for a device."
+)
+async def update_device_config(
+    device_uuid: str,
+    request: DeviceConfigRequest,
+    db = Depends(get_mongo_db),
+    admin: dict = Depends(get_current_admin)
+):
+    device = await db.devices.find_one({"uuid": device_uuid})
+    if not device:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Device with UUID {device_uuid} not found"
+        )
+    await db.devices.update_one(
+        {"uuid": device_uuid},
+        {"$set": {"regular_interval": request.regular_interval}}
+    )
+    logger.info(f"Updated configuration for device {device_uuid}: regular_interval={request.regular_interval}s")
+    return {"detail": "Configuration updated successfully", "regular_interval": request.regular_interval}
