@@ -1,8 +1,9 @@
 import asyncio
 import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from bson import ObjectId
 from fastapi import HTTPException, status
+from pymongo import ReturnDocument
 
 from app.database_mongo import get_mongo_db
 from app.websocket import manager
@@ -113,6 +114,38 @@ async def select_device(db, exclude_devices: List[str] = None, long_batch: bool 
 
     return best_uuid
 
+async def claim_next_message(db, device_uuid: str, queue_type: str) -> Optional[Dict[str, Any]]:
+    """Atomically claim the next unassigned or self-assigned queued message for a device.
+    
+    Uses find_one_and_update to ensure no two devices can claim the same message.
+    Messages with device_uuid=None (unassigned) or already assigned to this device are eligible.
+    """
+    now = datetime.datetime.utcnow()
+    msg = await db.sms_queue.find_one_and_update(
+        {
+            "queue_type": queue_type,
+            "status": {"$in": ["PENDING", "QUEUED"]},
+            "$or": [
+                {"device_uuid": None},
+                {"device_uuid": ""},
+                {"device_uuid": device_uuid},
+            ]
+        },
+        {"$set": {
+            "device_uuid": device_uuid,
+            "status": "PROCESSING",
+            "updated_at": now
+        }},
+        sort=[("created_at", 1)],
+        return_document=ReturnDocument.AFTER
+    )
+    if msg:
+        # Sync the device assignment to backwards-compatible log collections
+        await db.sms_jobs.update_one({"_id": msg["_id"]}, {"$set": {"device_uuid": device_uuid, "status": "PROCESSING"}})
+        await db.bulk_sms_logs.update_one({"_id": msg["_id"]}, {"$set": {"device_uuid": device_uuid, "status": "PROCESSING"}})
+        logger.info(f"Device {device_uuid} claimed {queue_type} job {msg['_id']}")
+    return msg
+
 async def handle_send_failure(msg: Dict[str, Any], db, reason: str):
     """Executes the Retry & Failover Strategy."""
     job_id = msg["_id"]
@@ -176,16 +209,13 @@ async def handle_send_failure(msg: Dict[str, Any], db, reason: str):
     logger.error(f"Job {job_id} failed on {current_device} and abandoned after max retries. Reason: {reason}")
 
 async def send_queued_message(msg: Dict[str, Any], db) -> bool:
-    """Send queued SMS to the selected device via WebSocket and await RESULT."""
+    """Send a claimed SMS to its assigned device via WebSocket and await RESULT.
+    
+    Note: The message should already be in PROCESSING state with device_uuid set
+    by claim_next_message(). This function handles the WebSocket send and result tracking.
+    """
     job_id = str(msg["_id"])
     device_uuid = msg["device_uuid"]
-
-    await db.sms_queue.update_one(
-        {"_id": msg["_id"]},
-        {"$set": {"status": "PROCESSING", "updated_at": datetime.datetime.utcnow()}}
-    )
-    await db.sms_jobs.update_one({"_id": msg["_id"]}, {"$set": {"status": "PROCESSING"}})
-    await db.bulk_sms_logs.update_one({"_id": msg["_id"]}, {"$set": {"status": "PROCESSING"}})
 
     payload = {
         "type": "SEND_SMS",
@@ -219,7 +249,7 @@ async def send_queued_message(msg: Dict[str, Any], db) -> bool:
                     }}
                 )
                 await db.sms_jobs.update_one({"_id": msg["_id"]}, {"$set": {"status": "SENT", "sent_at": now}})
-                await db.bulk_sms_logs.update_one({"_id": msg["_id"]}, {"$set": {"status": "SENT", "sent_at": now}})
+                await db.bulk_sms_logs.update_one({"_id": msg["_id"]}, {"$set": {"status": "SENT", "sent_at": now, "device_uuid": device_uuid}})
                 logger.success(f"Job {job_id} sent successfully by device {device_uuid}")
                 return True
             else:
@@ -235,30 +265,27 @@ async def send_queued_message(msg: Dict[str, Any], db) -> bool:
         pending_results.pop(job_id, None)
 
 async def device_queue_worker(device_uuid: str):
-    """Processes Priority and Regular queues for a specific device in a loop."""
+    """Claims and processes messages from the shared queue pool for a specific device.
+    
+    Uses claim-based processing: the worker atomically claims the next available
+    unassigned message from the shared pool, processes it, then claims the next one.
+    This provides automatic load balancing across all connected devices.
+    """
     logger.info(f"Device queue worker started for device: {device_uuid}")
     db = await get_mongo_db()
 
     while device_uuid in manager.active_connections:
         try:
-            # 1. Process Priority Queue first (oldest first)
-            priority_msg = await db.sms_queue.find_one({
-                "device_uuid": device_uuid,
-                "queue_type": "PRIORITY",
-                "status": {"$in": ["PENDING", "QUEUED"]}
-            }, sort=[("created_at", 1)])
+            # 1. Claim and process Priority Queue first (oldest first)
+            priority_msg = await claim_next_message(db, device_uuid, "PRIORITY")
 
             if priority_msg:
                 await send_queued_message(priority_msg, db)
                 # Loop immediately for priority queue (no send interval)
                 continue
 
-            # 2. Process Regular Queue if priority queue is empty
-            regular_msg = await db.sms_queue.find_one({
-                "device_uuid": device_uuid,
-                "queue_type": "REGULAR",
-                "status": {"$in": ["PENDING", "QUEUED"]}
-            }, sort=[("created_at", 1)])
+            # 2. Claim and process Regular Queue if no priority messages available
+            regular_msg = await claim_next_message(db, device_uuid, "REGULAR")
 
             if regular_msg:
                 await send_queued_message(regular_msg, db)
@@ -267,14 +294,18 @@ async def device_queue_worker(device_uuid: str):
                 device_doc = await db.devices.find_one({"uuid": device_uuid})
                 interval = device_doc.get("regular_interval", 2.0) if device_doc else 2.0
 
-                # Preemptible sleep loop: wait for 'interval' seconds but poll for priority messages
+                # Preemptible sleep loop: wait for 'interval' seconds but check for priority messages
                 slept = 0.0
                 while slept < interval:
-                    # Break sleep early if new priority message is queued
+                    # Break sleep early if any priority message exists in the shared pool
                     has_priority = await db.sms_queue.find_one({
-                        "device_uuid": device_uuid,
                         "queue_type": "PRIORITY",
-                        "status": {"$in": ["PENDING", "QUEUED"]}
+                        "status": {"$in": ["PENDING", "QUEUED"]},
+                        "$or": [
+                            {"device_uuid": None},
+                            {"device_uuid": ""},
+                            {"device_uuid": device_uuid},
+                        ]
                     })
                     if has_priority:
                         logger.info(f"Preempting regular queue interval for {device_uuid} due to priority arrival.")
@@ -287,7 +318,7 @@ async def device_queue_worker(device_uuid: str):
                         break
                 continue
 
-            # 3. Queue is empty: sleep short interval before polling again
+            # 3. No messages available in shared pool: sleep short interval before polling again
             await asyncio.sleep(0.5)
 
         except Exception as e:
@@ -297,47 +328,46 @@ async def device_queue_worker(device_uuid: str):
     logger.warning(f"Device queue worker stopped for device: {device_uuid}")
 
 async def reassign_device_jobs(device_uuid: str, db):
-    """Immediately reassigns all PENDING, QUEUED, or PROCESSING jobs of a disconnected device to other active devices."""
-    active_uuids = list(manager.active_connections.keys())
-    # Filter out the disconnected device itself
-    active_candidates = [uid for uid in active_uuids if uid != device_uuid]
+    """Unassigns all PENDING, QUEUED, or PROCESSING jobs of a disconnected device
+    back into the shared pool so any available worker can claim them."""
+    now = datetime.datetime.utcnow()
     
-    if not active_candidates:
-        logger.warning(f"No other online devices available to immediately reassign jobs from disconnected device {device_uuid}")
-        return
-
-    cursor = db.sms_queue.find({
-        "status": {"$in": ["PENDING", "QUEUED", "PROCESSING"]},
-        "device_uuid": device_uuid
-    })
+    result = await db.sms_queue.update_many(
+        {
+            "status": {"$in": ["PENDING", "QUEUED", "PROCESSING"]},
+            "device_uuid": device_uuid
+        },
+        {"$set": {
+            "device_uuid": None,
+            "status": "QUEUED",
+            "error_detail": f"Unassigned: Device {device_uuid} disconnected.",
+            "updated_at": now
+        },
+        "$addToSet": {
+            "failed_devices": device_uuid
+        }}
+    )
     
-    async for msg in cursor:
-        job_id = msg["_id"]
-        failed_devices = msg.get("failed_devices", [])
-        if device_uuid not in failed_devices:
-            failed_devices.append(device_uuid)
-            
-        try:
-            new_device = await select_device(db, exclude_devices=failed_devices)
-            await db.sms_queue.update_one(
-                {"_id": job_id},
-                {"$set": {
-                    "device_uuid": new_device,
-                    "status": "QUEUED",
-                    "failed_devices": failed_devices,
-                    "error_detail": f"Re-assigned: Device {device_uuid} disconnected.",
-                    "updated_at": datetime.datetime.utcnow()
-                }}
-            )
-            # Synchronize backwards compatible logs (if exists)
-            await db.sms_jobs.update_one({"_id": job_id}, {"$set": {"device_uuid": new_device, "status": "PENDING"}})
-            await db.bulk_sms_logs.update_one({"_id": job_id}, {"$set": {"device_uuid": new_device, "status": "PENDING"}})
-            logger.info(f"Immediately re-assigned job {job_id} from disconnected device {device_uuid} to online device {new_device}")
-        except Exception as e:
-            logger.warning(f"Unable to immediately re-assign job {job_id} of disconnected device {device_uuid}: {e}")
+    if result.modified_count > 0:
+        # Sync backwards-compatible log collections
+        await db.sms_jobs.update_many(
+            {"device_uuid": device_uuid, "status": {"$in": ["PENDING", "PROCESSING"]}},
+            {"$set": {"device_uuid": None, "status": "PENDING"}}
+        )
+        await db.bulk_sms_logs.update_many(
+            {"device_uuid": device_uuid, "status": {"$in": ["PENDING", "PROCESSING"]}},
+            {"$set": {"device_uuid": None, "status": "PENDING"}}
+        )
+        logger.info(f"Unassigned {result.modified_count} jobs from disconnected device {device_uuid} back to shared pool")
+    else:
+        logger.info(f"No active jobs found for disconnected device {device_uuid}")
 
 async def global_queue_processor():
-    """Monitors online devices and spawns/manages device queue workers."""
+    """Monitors online devices and spawns/manages device queue workers.
+    
+    Also handles orphaned jobs: messages assigned to devices that are no longer
+    online get unassigned back to the shared pool.
+    """
     logger.info("Starting global SMS queue processor...")
     while True:
         try:
@@ -349,34 +379,31 @@ async def global_queue_processor():
                 if uuid not in active_workers or active_workers[uuid].done():
                     active_workers[uuid] = asyncio.create_task(device_queue_worker(uuid))
 
-            # Failover handling: Re-assign queued/processing messages belonging to offline devices
-            async for msg in db.sms_queue.find({
-                "status": {"$in": ["PENDING", "QUEUED", "PROCESSING"]},
-                "device_uuid": {"$nin": active_uuids}
-            }):
-                try:
-                    failed_devices = msg.get("failed_devices", [])
-                    old_device = msg["device_uuid"]
-                    if old_device not in failed_devices:
-                        failed_devices.append(old_device)
+            # Cleanup stale workers for devices that disconnected
+            stale_workers = [uid for uid in list(active_workers.keys()) if uid not in active_uuids]
+            for uid in stale_workers:
+                task = active_workers.pop(uid, None)
+                if task and not task.done():
+                    task.cancel()
 
-                    new_device = await select_device(db, exclude_devices=failed_devices)
-                    await db.sms_queue.update_one(
-                        {"_id": msg["_id"]},
-                        {"$set": {
-                            "device_uuid": new_device,
-                            "status": "QUEUED",
-                            "failed_devices": failed_devices,
-                            "error_detail": f"Re-assigned: Device {old_device} disconnected.",
-                            "updated_at": datetime.datetime.utcnow()
-                        }}
-                    )
-                    # Synchronize backwards compatible logs (if exists)
-                    await db.sms_jobs.update_one({"_id": msg["_id"]}, {"$set": {"device_uuid": new_device, "status": "PENDING"}})
-                    await db.bulk_sms_logs.update_one({"_id": msg["_id"]}, {"$set": {"device_uuid": new_device, "status": "PENDING"}})
-                    logger.info(f"Re-assigned job {msg['_id']} from offline device {old_device} to online device {new_device}")
-                except Exception as e:
-                    logger.warning(f"Unable to re-assign job {msg['_id']} of offline device {msg['device_uuid']}: {e}")
+            # Failover handling: Unassign orphaned jobs (assigned to offline devices)
+            # back to the shared pool so active workers can claim them
+            if active_uuids:
+                now = datetime.datetime.utcnow()
+                result = await db.sms_queue.update_many(
+                    {
+                        "status": {"$in": ["PENDING", "QUEUED", "PROCESSING"]},
+                        "device_uuid": {"$nin": active_uuids + [None, ""]}
+                    },
+                    {"$set": {
+                        "device_uuid": None,
+                        "status": "QUEUED",
+                        "error_detail": "Unassigned: Original device went offline.",
+                        "updated_at": now
+                    }}
+                )
+                if result.modified_count > 0:
+                    logger.info(f"Unassigned {result.modified_count} orphaned jobs back to shared pool")
 
         except Exception as e:
             logger.error(f"Error in global queue processor: {e}")
