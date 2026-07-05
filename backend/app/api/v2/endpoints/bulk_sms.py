@@ -9,7 +9,6 @@ from app.schemas import BulkSmsRow, CampaignRequest
 from app.websocket import manager
 from app.logger import logger
 from app.database_mongo import get_mongo_db
-from app.queue_manager import select_device
 from app.auth import get_current_admin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -17,17 +16,18 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 from bson import ObjectId
 
 async def process_bulk_sms(campaign_id: ObjectId, rows: List[BulkSmsRow], queue_type: str, db):
-    """Processes bulk/campaign SMS by dynamically selecting devices and enqueuing jobs."""
-    long_batch = len(rows) > 10
+    """Enqueues bulk/campaign SMS into the shared queue pool.
+    
+    Messages are enqueued with device_uuid=None (unassigned). Connected device
+    workers will dynamically claim and process them from the shared pool,
+    ensuring automatic load balancing across all online devices.
+    """
     for row in rows:
         try:
-            # Before enqueuing/sending each SMS, select the best device
-            device_uuid = await select_device(db, long_batch=long_batch)
-            
             now = datetime.datetime.utcnow()
             queue_doc = {
                 "campaign_id": campaign_id,
-                "device_uuid": device_uuid,
+                "device_uuid": None,
                 "phone_number": row.phone_number,
                 "message": row.message,
                 "name": row.name,
@@ -44,7 +44,7 @@ async def process_bulk_sms(campaign_id: ObjectId, rows: List[BulkSmsRow], queue_
             log_doc = {
                 "_id": result.inserted_id,
                 "campaign_id": campaign_id,
-                "device_uuid": device_uuid,
+                "device_uuid": None,
                 "phone_number": row.phone_number,
                 "message": row.message,
                 "status": "PENDING",
@@ -52,7 +52,7 @@ async def process_bulk_sms(campaign_id: ObjectId, rows: List[BulkSmsRow], queue_
                 "sent_at": None
             }
             await db.bulk_sms_logs.insert_one(log_doc)
-            logger.info(f"V2: Queued bulk message job {result.inserted_id} for device {device_uuid} in campaign {campaign_id}")
+            logger.info(f"V2: Queued bulk message job {result.inserted_id} (unassigned) in campaign {campaign_id}")
         except Exception as e:
             logger.error(f"V2 Error processing bulk SMS row {row}: {e}")
 
@@ -231,6 +231,8 @@ async def get_bulk_sms_logs(
     
     for log in logs:
         log["_id"] = str(log["_id"])
+        if "campaign_id" in log and log["campaign_id"] is not None:
+            log["campaign_id"] = str(log["campaign_id"])
         if "created_at" in log and isinstance(log["created_at"], datetime.datetime):
             log["created_at"] = log["created_at"].isoformat()
         if "sent_at" in log and isinstance(log["sent_at"], datetime.datetime):
@@ -263,6 +265,12 @@ async def get_queue_stats(db = Depends(get_mongo_db), admin: dict = Depends(get_
         "status": {"$in": ["PENDING", "QUEUED", "PROCESSING"]}
     })
     
+    # Count unassigned messages in the shared pool (device_uuid is None or empty)
+    unassigned_count = await db.sms_queue.count_documents({
+        "status": {"$in": ["PENDING", "QUEUED"]},
+        "$or": [{"device_uuid": None}, {"device_uuid": ""}]
+    })
+    
     # 2. Get active UUIDs from the websocket connections manager
     active_uuids = list(manager.active_connections.keys())
     
@@ -283,7 +291,7 @@ async def get_queue_stats(db = Depends(get_mongo_db), admin: dict = Depends(get_
             if delta_sec > 30.0:
                 is_online = False
                 
-        # Query queue counts for this device
+        # Query queue counts for this device (only messages currently claimed by this device)
         sent_count = await db.sms_queue.count_documents({
             "device_uuid": uuid,
             "status": "SENT"
@@ -318,11 +326,12 @@ async def get_queue_stats(db = Depends(get_mongo_db), admin: dict = Depends(get_
             success_rate = round((sent_count / total_completed) * 100, 2)
             
         # Determine current action
+        # With shared pool: device is "waiting" if there are unassigned messages it can claim
         if not is_online:
             action = "offline"
         elif processing_count > 0 or priority_pending > 0:
             action = "sending"
-        elif pending_count > 0:
+        elif pending_count > 0 or unassigned_count > 0:
             action = "waiting"
         else:
             action = "idle"
@@ -377,6 +386,7 @@ async def get_queue_stats(db = Depends(get_mongo_db), admin: dict = Depends(get_
     return {
         "priority_queue_count": priority_count,
         "regular_queue_count": regular_count,
+        "unassigned_count": unassigned_count,
         "devices": device_stats,
         "timestamp": now.isoformat()
     }
