@@ -4,12 +4,13 @@
     <strong>Self-Hosted SMS Gateway — Turn Android Phones into Programmable SMS Senders</strong>
   </p>
   <p align="center">
-    <a href="#-quick-start">Quick Start</a> •
-    <a href="#-architecture">Architecture</a> •
-    <a href="#-api-reference">API Reference</a> •
-    <a href="#-admin-dashboard">Dashboard</a> •
-    <a href="#-android-app">Android App</a> •
-    <a href="#-how-sms-sending-works">How It Works</a>
+    <a href="#quick-start">Quick Start</a> •
+    <a href="#architecture">Architecture</a> •
+    <a href="#api-reference">API Reference</a> •
+    <a href="#admin-dashboard-interface">Dashboard</a> •
+    <a href="#android-app-interface">Android App</a> •
+    <a href="#how-sms-sending-works">How It Works</a> •
+    <a href="#screenshots">Screenshots</a>
   </p>
 </p>
 
@@ -946,12 +947,66 @@ Legacy aliases are also available at the root path (e.g., `/devices/register`) p
 
 ---
 
-## 📄 License
+---
+
+## Screenshots
+
+Below is a visual preview of the OpenRelay system. For a fully detailed breakdown of each screen and view mode, refer to [SCREENSHOTS.md](SCREENSHOTS.md).
+
+### Web Admin Dashboard
+
+The web dashboard provides real-time tracking, device monitoring, log access, and campaign dispatch.
+
+#### Device Registry and Telemetry Monitoring
+Monitor connected Android gateways in real-time. Features card-based and list-based layouts with indicators for connection status, battery, signal strength, cellular carrier, and GPS coordinates.
+
+| Card View | Table View |
+|---|---|
+| ![Device Cards View](screenshots/web/devices-card-view.png) | ![Device Table View](screenshots/web/devices-table-view.png) |
+
+#### Queue Flow Visualization
+Visual diagram of the dynamic message triaging and processing pipelines, showing current loads in the priority and regular queues alongside individual gateway dispatch statuses.
+
+![Queue Flow View](screenshots/web/queue-flow.png)
+
+#### SMS Console and Campaign Dispatch
+Send single messages using a designated gateway device or perform large-scale CSV campaigns.
+
+| Single SMS Console | Bulk CSV Campaign Upload |
+|---|---|
+| ![SMS Console](screenshots/web/sms-console.png) | ![Bulk Upload](screenshots/web/bulk-sms-upload.png) |
+
+#### Logs and Sending History
+Review paginated and searchable logs of single and bulk dispatch jobs. Includes options to toggle telephone number masking.
+
+![Logs View](screenshots/web/logs-single-messages.png)
+
+---
+
+### Android Companion Application
+
+The Flutter-based companion app acts as an autonomous cellular gateway on your phone.
+
+#### Connection Dashboard and Device Telemetry
+Controls background service connection states, visualizes current transmission counts, and transmits local telemetry (battery, signal, GPS) back to the server.
+
+![Android Dashboard](screenshots/mobile/screenshot-1.png)
+
+#### Message Job Log and Configuration Settings
+Manage active local transmission jobs, view background connection logs, and set configuration profiles.
+
+| Local Job Logs | System Configuration |
+|---|---|
+| ![Local Jobs Log](screenshots/mobile/screenshot-2.png) | ![Settings View](screenshots/mobile/screenshot-4.png) |
+
+---
+
+## License
 
 This project is open-source. See the [LICENSE](LICENSE) file for details.
 
 ---
 
 <p align="center">
-  <strong>Built with ❤️ — Your phones, your SIMs, your gateway.</strong>
+  <strong>Built with OpenRelay — Your phones, your SIMs, your gateway.</strong>
 </p>
