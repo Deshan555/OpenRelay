@@ -27,6 +27,7 @@ export default function LogsTab({ getAuthHeaders }: LogsTabProps) {
   const [totalBulkPages, setTotalBulkPages] = useState<number>(1);
   
   const [loadingLogs, setLoadingLogs] = useState<boolean>(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [selectedLog, setSelectedLog] = useState<any | null>(null);
 
   const handleMaskChange = (val: boolean) => {
@@ -50,6 +51,7 @@ export default function LogsTab({ getAuthHeaders }: LogsTabProps) {
   const fetchLogs = async () => {
     try {
       setLoadingLogs(true);
+      setErrorMessage(null);
       const queryParams = `page_size=${pageSize}&search=${encodeURIComponent(searchQuery)}&status=${statusFilter}`;
       
       const [smsRes, bulkRes] = await Promise.all([
@@ -57,18 +59,28 @@ export default function LogsTab({ getAuthHeaders }: LogsTabProps) {
         fetch(`${API_BASE_URL}/api/v2/admin/bulk-sms/logs?page=${bulkLogsPage}&${queryParams}`, { headers: getAuthHeaders() })
       ]);
 
+      let hasError = false;
       if (smsRes.ok) {
         const smsData = await smsRes.json();
         setSmsLogs(smsData.logs);
         setTotalSinglePages(smsData.total_pages);
+      } else {
+        hasError = true;
       }
       if (bulkRes.ok) {
         const bulkData = await bulkRes.json();
         setBulkLogs(bulkData.logs);
         setTotalBulkPages(bulkData.total_pages);
+      } else {
+        hasError = true;
+      }
+
+      if (hasError) {
+        setErrorMessage("Failed to fetch some logs. Please check backend server status.");
       }
     } catch (err) {
       console.error("Error fetching logs:", err);
+      setErrorMessage("Network error fetching logs. Please try again.");
     } finally {
       setLoadingLogs(false);
     }
@@ -197,6 +209,12 @@ export default function LogsTab({ getAuthHeaders }: LogsTabProps) {
         </div>
       ) : (
         <>
+          {errorMessage && (
+            <div className="bg-[#FFEBEE] border-2 border-[#E50012] text-[#E50012] p-4 text-xs font-bold font-mono rounded-none mb-4 flex items-center justify-between">
+              <span>⚠️ ERROR: {errorMessage}</span>
+              <button onClick={() => setErrorMessage(null)} className="text-[#E50012] hover:text-black font-black cursor-pointer">✕</button>
+            </div>
+          )}
           <div className="bg-white border-2 border-[#111111] overflow-x-auto">
             {activeLogSubTab === 'single' ? (
               smsLogs.length === 0 ? (
