@@ -35,6 +35,13 @@ async def lifespan(app: FastAPI):
         ("status", 1),
         ("created_at", 1)
     ])
+    # Index optimized for claim-based queue processing (dynamic device sharing)
+    await db.sms_queue.create_index([
+        ("queue_type", 1),
+        ("status", 1),
+        ("device_uuid", 1),
+        ("created_at", 1)
+    ])
     logger.success("SMS queue indexes initialized.")
 
     # Start background queue manager
